@@ -1,1 +1,1 @@
-anomaly-demonized-scripts
+Source of not so truthy repo for all uncommon anomaly dependencies

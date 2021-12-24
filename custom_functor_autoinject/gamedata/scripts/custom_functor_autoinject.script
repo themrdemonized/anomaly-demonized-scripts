@@ -540,4 +540,3 @@ end
 function on_game_start()
 	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
 end
-

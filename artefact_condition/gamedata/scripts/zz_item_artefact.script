@@ -150,6 +150,13 @@ local arts_degradable = {
     ["i_mutant_belt"] = true,
 }
 
+local ignore_sec = {
+	["lead_box"] = true,
+	["af_iam"] = true,
+	["af_aam"] = true,
+	["af_aac"] = true,
+}
+
 local function is_art_degradable(obj, sec)
     local section = obj and obj:section() or sec
     return arts_degradable[SYS_GetParam(0, section, "kind", "")]
@@ -184,7 +191,7 @@ end
 
 local get_param = SYS_GetParam
 local function new_get_param(typ, sec, param, def)
-    if param == "use_condition" and arts_degradable[get_param(0, sec, "kind", "")] then
+    if param == "use_condition" and arts_degradable[get_param(0, sec, "kind", "")] and not ignore_sec[sec] then
         return true
     else
         return get_param(typ, sec, param, def)

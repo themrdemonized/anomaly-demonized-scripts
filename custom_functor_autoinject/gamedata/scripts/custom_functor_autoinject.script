@@ -395,16 +395,12 @@ ui_inventory.UIInventory.remove_override = function(self, slot)
 end
 
 ui_inventory.UIInventory.get_functor_at_slot = function(self, slot)
-	return function(obj, bag, temp)
-		return self:Name_Custom(obj, bag, temp, slot)
-	end, function(obj, bag, temp)
-		return self:Action_Custom(obj, bag, temp, slot)
-	end
+	return self.custom_functor[slot]
 end
 
 ui_inventory.UIInventory.get_functor_by_name = function(self, name)
-	if self.custom_functor_names[name] then 
-		return self:get_functor_at_slot(self.custom_functor_names[name])
+	if self.custom_functor_names[name] then
+		return self.custom_functor[self.custom_functor_names[name]], self.custom_functor_names[name]
 	end
 end
 

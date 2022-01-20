@@ -1,7 +1,30 @@
 -- Optimized time events, using sorted arrays to peek only closest event to come
 -- Designed to fully reimplement existing timed events with all its quirks
--- Unlike vanilla time events, fires on actor_on_update and doesn't require any checks
 -- Written by demonized
+
+-- Original description
+--------------------------------------------------------------------------------------------------
+-- 											DELAYED EVENT QUEUE
+-------------------------------------------------------------------------------------------------------
+--[[
+-- Events must have a unique id. Such as object id or another identifier unique to the occasion.
+-- Action id must be unique to the specific Event. This allows a single event to have many queued
+-- actions waiting to happen.
+--
+-- Returning true will remove the queued action. Returning false will execute the action continuously.
+-- This allows for events to wait for a specific occurrence, such as triggering after a certain amount of
+-- time only when object is offline
+--
+-- param 1 - Event ID as type<any>
+-- param 2 - Action ID as type<any>
+-- param 3 - Timer in seconds as type<number>
+-- param 4 - Function to execute as type<function>
+-- extra params are passed to executing function as table as param 1
+
+-- see on_game_load or state_mgr_animation.script for example uses
+-- This does not persists through saves! So only use for non-important things.
+-- For example, do not try to destroy npcs unless you do not care that it can fail before player saved then loaded.
+--]]
 
 local ev_queue = {}
 local computed_ev_queue = {}
@@ -201,6 +224,10 @@ end
 
 local tg_past = 0
 function ProcessEventQueue(force)
+	if has_alife_info("sleep_active") then
+		return false
+	end
+
 	tg = time_global()
 	if tg > tg_past then
 		printf("tg %s", tg)
@@ -247,10 +274,17 @@ function ProcessEventQueue(force)
 	return false
 end
 
-local function process_queue()
-	ProcessEventQueue()
+function ProcessEventQueueState(m_data,save)
+	if (save) then
+		m_data.event_queue = ev_queue
+	else
+		ev_queue = m_data.event_queue or ev_queue
+	end
+	refresh_ev_queue()
 end
 
-function on_game_start()
-	RegisterScriptCallback("actor_on_update", process_queue)
-end
+_G.CreateTimeEvent = CreateTimeEvent
+_G.RemoveTimeEvent = RemoveTimeEvent
+_G.ResetTimeEvent = ResetTimeEvent
+_G.ProcessEventQueue = ProcessEventQueue
+_G.ProcessEventQueueState = ProcessEventQueueState

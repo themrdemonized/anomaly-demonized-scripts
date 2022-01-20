@@ -229,12 +229,12 @@ function ProcessEventQueue(force)
 	end
 
 	tg = time_global()
-	if tg > tg_past then
-		printf("tg %s", tg)
-		printf("computed")
-		print_table(computed_ev_queue)
-		tg_past = tg + 100
-	end
+	-- if tg > tg_past then
+	-- 	printf("tg %s", tg)
+	-- 	printf("computed")
+	-- 	print_table(computed_ev_queue)
+	-- 	tg_past = tg + 100
+	-- end
 
 	local to_remove = {}
 	local force_refresh

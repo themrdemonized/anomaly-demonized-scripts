@@ -223,6 +223,7 @@ function ResetTimeEvent(ev_id,act_id,timer)
 end
 
 local tg_past = 0
+local to_remove = {}
 function ProcessEventQueue(force)
 	if has_alife_info("sleep_active") then
 		return false
@@ -236,7 +237,6 @@ function ProcessEventQueue(force)
 	-- 	tg_past = tg + 100
 	-- end
 
-	local to_remove = {}
 	local force_refresh
 	for i = 1, #computed_ev_queue do
 		local t = computed_ev_queue[i] or (function()
@@ -267,6 +267,7 @@ function ProcessEventQueue(force)
 			local t = to_remove[i]
 			remove_ev_queue(t.ev_id, t.act_id)
 		end
+		empty_table(to_remove)
 	elseif force_refresh then
 		refresh_ev_queue()
 	end

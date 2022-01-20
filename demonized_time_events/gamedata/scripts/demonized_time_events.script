@@ -235,14 +235,15 @@ function ProcessEventQueue(force)
 		end
 	end
 
-	if to_remove[1] then
+	if force_refresh then
+		refresh_ev_queue()
+		empty_table(to_remove)
+	elseif to_remove[1] then
 		for i = 1, #to_remove do
 			local t = to_remove[i]
 			remove_ev_queue(t.ev_id, t.act_id)
 		end
 		empty_table(to_remove)
-	elseif force_refresh then
-		refresh_ev_queue()
 	end
 	
 	return false

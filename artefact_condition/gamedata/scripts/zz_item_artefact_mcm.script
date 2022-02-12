@@ -1,6 +1,6 @@
 op = {
 	id = "item_artefact", sh = true, gr = {
-    	{id = "banner", type = "slide", text = "ui_mcm_artefact_condition", size = {512, 50}, spacing = 20},
+    	{id = "banner", type = "slide", text = "ui_mcm_item_artefact_title", size = {512, 50}, spacing = 20},
         {id = "enable_condition_bar", type = "check", val = 1, def = true},
         {id = "divider", type = "line"},
         {id = "enable_degraded_drops", type = "check", val = 1, def = true},

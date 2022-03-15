@@ -47,6 +47,11 @@ function process_queue(queue_name, queue_table, func, on_end_func, ...)
 		return
 	end
 
+	if active_queues[queue_name] then
+		printf("queue %s is already active, abort", queue_name)
+		return
+	end
+
 	local table_remove = table.remove
 	local unpack = unpack
 	local is_empty = is_empty

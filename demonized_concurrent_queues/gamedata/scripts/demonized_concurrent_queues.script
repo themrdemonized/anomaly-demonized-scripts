@@ -1,0 +1,90 @@
+local function table_keys(t, is_array)
+	local a = {}
+	if is_array then
+		for i = 1, #t do
+			a[i] = i
+		end
+	else
+		for k,v in pairs(t) do
+			a[#a+1] = k
+		end
+	end
+	return a
+end
+
+-- Queue to span processing on each game tick
+-- Arguments:
+--	  queue_name - name of queue
+--    queue_table - table to process
+--    func - function for processing, must have at least first two arguments: key of queue_table, value by that key
+--	  returning true will remove element from queue, returning false or nil will leave it in queue for next process cycle
+--	  on_end_func - function at the end of queue processing, you can use this for chaining queue processing one after another
+--    ... - additional arguments for "func"
+-- active_queues table contains names of queues that are active.
+
+-- Example usage, get an object by id one at a time per game update
+--[[
+
+local ids = {1, 2, 3, 4, 5, 6, 7, 8}
+process_queue("my_queue", ids, function(i, id)
+		local obj = level.object_by_id(id)
+		if obj then
+			printf("object %s, section %s, time_global %s", id, obj:section(), time_global())
+		end
+		return true
+	end, function()
+		printf("queue processed, final time %s", time_global())
+	end
+)
+
+]]
+
+active_queues = {}
+function process_queue(queue_name, queue_table, func, on_end_func, ...)
+	-- queue_table must be a table
+	if not queue_table or type(queue_table) ~= "table" then
+		printf("%s is not table, abort", queue_table)
+		return
+	end
+
+	local table_remove = table.remove
+	local unpack = unpack
+	local is_empty = is_empty
+
+	-- Collect table keys and initialize the table index
+	local i = 1
+	local keys = table_keys(queue_table)
+
+	local args = {...}
+	local update_func
+	update_func = function()
+		local j = keys[i]
+		if func(j, queue_table[j], unpack(args)) == true then
+			queue_table[j] = nil
+			table_remove(keys, i)
+			i = i - 1
+		end
+		if not keys[1] then
+			if on_end_func then on_end_func() end
+			UnregisterScriptCallback("actor_on_update", update_func)
+			active_queues[queue_name] = nil
+		end
+		i = i == #keys and 1 or i + 1
+	end
+	active_queues[queue_name] = {
+		queue_table = queue_table,
+		func = update_func,
+		on_end_func = on_end_func,
+	}
+	RegisterScriptCallback("actor_on_update", update_func)
+end
+
+function remove_queue(queue_name, on_end)
+	if active_queues[queue_name] then
+		if on_end and active_queues[queue_name].on_end_func then
+			active_queues[queue_name].on_end_func()
+		end
+		UnregisterScriptCallback("actor_on_update", active_queues[queue_name].func)
+		active_queues[queue_name] = nil
+	end
+end

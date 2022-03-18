@@ -16,7 +16,7 @@ end
 -- Arguments:
 --	  queue_name - name of queue
 --    queue_table - table to process
---    func - function for processing, must have at least first two arguments: key of queue_table, value by that key
+--    func - function for processing, must have at least first 3 arguments: key of queue_table, value by that key, the number of key in processing order
 --	  returning true will remove element from queue, returning false or nil will leave it in queue for next process cycle
 --	  on_end_func - function at the end of queue processing, you can use this for chaining queue processing one after another
 --    ... - additional arguments for "func"
@@ -26,7 +26,7 @@ end
 --[[
 
 local ids = {1, 2, 3, 4, 5, 6, 7, 8}
-process_queue("my_queue", ids, function(i, id)
+process_queue("my_queue", ids, function(k, id, i)
 		local obj = level.object_by_id(id)
 		if obj then
 			printf("object %s, section %s, time_global %s", id, obj:section(), time_global())
@@ -64,7 +64,7 @@ function process_queue(queue_name, queue_table, func, on_end_func, ...)
 	local update_func
 	update_func = function()
 		local j = keys[i]
-		if func(j, queue_table[j], unpack(args)) == true then
+		if func(j, queue_table[j], i, unpack(args)) == true then
 			queue_table[j] = nil
 			table_remove(keys, i)
 			i = i - 1

@@ -12,6 +12,8 @@ local table_insert = table.insert
 local table_remove = table.remove
 local table_sort = table.sort
 
+local empty_table = empty_table
+
 local pairs = pairs
 
 local function table_slice(t, first, last)
@@ -209,6 +211,19 @@ function kdTree(points, metric, dimensions)
         removeNode(node);
     end
 
+    kd_tree.clearRoot = function(self)
+        empty_table(self.root)
+    end
+
+    -- Update positions of objects
+    -- Points input must be same structure as existing in k-d Tree
+
+    kd_tree.updatePositions = function(self, points)
+        self.points = points
+        self:clearRoot()
+        self.root = buildTree(points, 0, nil)
+    end
+
     -- Query the nearest *count* neighbours to a point, with an optional
     -- maximal search distance.
     -- Result is an array with *count* elements.
@@ -221,6 +236,7 @@ function kdTree(points, metric, dimensions)
         local bestNodes
 
         bestNodes = {}
+        local passedNodes = {}
 
         local maxNodes = maxNodes or 1
 
@@ -277,21 +293,23 @@ function kdTree(points, metric, dimensions)
             return pos
         end
 
+        local function saveNode(node, distance)
+            binary_insert(bestNodes, {node, distance}, comp_function)
+            if #bestNodes > maxNodes then
+                table_remove(bestNodes)
+            end
+        end
+
         local function nearestSearch(node)
+            if passedNodes[node] then return end
+
             local bestChild
             local dimension = self.dimensions[node.dimension]
             local ownDistance = self.metric(point, node.obj)
             local linearPoint = {}
             local linearDistance
             local otherChild
-            local i
-
-            local function saveNode(node, distance)
-                binary_insert(bestNodes, {node, distance}, comp_function)
-                if #bestNodes > maxNodes then
-                    table_remove(bestNodes)
-                end
-            end
+            local i            
 
             for i = 1, #self.dimensions do
                 linearPoint[self.dimensions[i]] = i == node.dimension and point[self.dimensions[i]] or node.obj[self.dimensions[i]]
@@ -303,6 +321,7 @@ function kdTree(points, metric, dimensions)
                 if #bestNodes < maxNodes or ownDistance < bestNodes[#bestNodes][2] then
                     saveNode(node, ownDistance);
                 end
+                passedNodes[node] = true
                 return
             end
 
@@ -318,6 +337,7 @@ function kdTree(points, metric, dimensions)
 
             if #bestNodes < maxNodes or ownDistance < bestNodes[#bestNodes][2] then
                 saveNode(node, ownDistance)
+                passedNodes[node] = true
             end
 
             if #bestNodes < maxNodes or math.abs(linearDistance) < bestNodes[1][2] then

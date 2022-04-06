@@ -493,3 +493,28 @@ function buildTreeSeObjectIds(ids)
     end
     return buildTreeVectors(vectors, data)
 end
+
+-- If you build a tree using functions above
+-- You can use this function to update positions and rebuild the tree 
+function updateObjPositions(kd_tree)
+    local points = kd_tree.points
+    local new_points = {}
+
+    local sim = alife()
+    local sim_object = sim.object
+    for i = 1, #points do
+        local obj = sim_object(sim, points[i].data)
+        if obj then
+            local pos = obj.position
+            table_insert(new_points, {
+                x = pos.x,
+                y = pos.y,
+                z = pos.z,
+                data = points[i].data
+            })
+        end
+    end
+
+    kd_tree:updatePositions(new_points)
+    return kd_tree
+end

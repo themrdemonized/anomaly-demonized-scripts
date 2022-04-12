@@ -97,13 +97,15 @@ function kdTree(points, metric, dimensions)
         end
 
         newNode = Node(point, (insertPosition.dimension + 1) % #self.dimensions, insertPosition)
-        dimension = self.dimensions[insertPosition.dimension];
+        dimension = self.dimensions[insertPosition.dimension]
 
         if point[dimension] < insertPosition.obj[dimension] then
             insertPosition.left = newNode
         else
             insertPosition.right = newNode
         end
+
+        return self
     end
 
     kd_tree.remove = function(self, point)
@@ -118,12 +120,12 @@ function kdTree(points, metric, dimensions)
                 return node
             end
 
-            local dimension = self.dimensions[node.dimension];
+            local dimension = self.dimensions[node.dimension]
 
             if point[dimension] < node.obj[dimension] then
                 return nodeSearch(node.left, node)
             else
-                return nodeSearch(node.right, node);
+                return nodeSearch(node.right, node)
             end
         end
 
@@ -152,10 +154,10 @@ function kdTree(points, metric, dimensions)
                     return node
                 end
 
-                own = node.obj[dimension];
-                left = findMin(node.left, dim);
-                right = findMin(node.right, dim);
-                min = node;
+                own = node.obj[dimension]
+                left = findMin(node.left, dim)
+                right = findMin(node.right, dim)
+                min = node
 
                 if left ~= nil and left.obj[dimension] < own then
                     min = left
@@ -165,13 +167,13 @@ function kdTree(points, metric, dimensions)
                     min = right
                 end
 
-                return min;
+                return min
             end
 
             if node.left == nil and node.right == nil then
                 if node.parent == nil then
                     self.root = nil
-                    return;
+                    return
                 end
 
                 pDimension = self.dimensions[node.parent.dimension]
@@ -208,11 +210,14 @@ function kdTree(points, metric, dimensions)
             return
         end
 
-        removeNode(node);
+        removeNode(node)
+
+        return self
     end
 
     kd_tree.clearRoot = function(self)
         empty_table(self.root)
+        return self
     end
 
     -- Update positions of objects
@@ -222,6 +227,7 @@ function kdTree(points, metric, dimensions)
         self.points = points
         self:clearRoot()
         self.root = buildTree(points, 0, nil)
+        return self
     end
 
     -- Query the nearest *count* neighbours to a point, with an optional
@@ -315,11 +321,11 @@ function kdTree(points, metric, dimensions)
                 linearPoint[self.dimensions[i]] = i == node.dimension and point[self.dimensions[i]] or node.obj[self.dimensions[i]]
             end
 
-            linearDistance = self.metric(linearPoint, node.obj);
+            linearDistance = self.metric(linearPoint, node.obj)
 
             if node.right == nil and node.left == nil then
                 if #bestNodes < maxNodes or ownDistance < bestNodes[#bestNodes][2] then
-                    saveNode(node, ownDistance);
+                    saveNode(node, ownDistance)
                 end
                 passedNodes[node] = true
                 return
@@ -333,7 +339,7 @@ function kdTree(points, metric, dimensions)
                 bestChild = point[dimension] < node.obj[dimension] and node.left or node.right
             end
 
-            nearestSearch(bestChild);
+            nearestSearch(bestChild)
 
             if #bestNodes < maxNodes or ownDistance < bestNodes[#bestNodes][2] then
                 saveNode(node, ownDistance)
@@ -358,7 +364,7 @@ function kdTree(points, metric, dimensions)
             nearestSearch(self.root)
         end
 
-        result = {};
+        result = {}
 
         for i = 1, math_min(maxNodes, #bestNodes) do
             if bestNodes[i][1] then
@@ -368,7 +374,8 @@ function kdTree(points, metric, dimensions)
                 }
             end
         end
-        return result;
+
+        return result
     end
 
     -- Get an approximation of how unbalanced the tree is.
@@ -388,10 +395,10 @@ function kdTree(points, metric, dimensions)
             if node == nil then
                 return 0
             end
-            return count(node.left) + count(node.right) + 1;
+            return count(node.left) + count(node.right) + 1
         end
 
-        return height(self.root) / (math_log(count(self.root)) / math_log(2));
+        return height(self.root) / (math_log(count(self.root)) / math_log(2))
     end
 
     return kd_tree

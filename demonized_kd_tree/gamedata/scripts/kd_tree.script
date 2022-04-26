@@ -432,6 +432,7 @@ will print position, distance and id of nearest object from given ids
 function buildTreeVectors(vectors, data)
     local v = {}
     local data = data or {}
+    local vectors = vectors or {}
     for k, t in pairs(vectors) do
         table_insert(v, {
             x = t.x or t[1],

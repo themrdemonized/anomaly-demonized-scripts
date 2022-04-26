@@ -48,7 +48,7 @@ function kdTree(points, metric, dimensions)
         local median
         local node
 
-        if not new_points then
+        if not new_points then 
             return
         end
 
@@ -76,12 +76,14 @@ function kdTree(points, metric, dimensions)
 
     kd_tree.root = buildTree(points, 0, nil)
 
-    kd_tree.insert = function(self, point)
-        if not self.root then
-            self.root = buildTree({point}, 0, nil)
-            return self
-        end
+    kd_tree.insertAndRebuild = function(self, point)
+        if not self.points then self.points = {} end
+        self.points[#self.points + 1] = point
+        self.root = buildTree(self.points, 0, nil)
+        return self
+    end
 
+    kd_tree.insert = function(self, point)
         local function innerSearch(node, parent)
 
             if node == nil then
@@ -101,8 +103,10 @@ function kdTree(points, metric, dimensions)
         local dimension
 
         if insertPosition == nil then
-            self.root = Node(point, 0, nil)
-            return
+            if not self.points then self.points = {} end
+            self.points[#self.points + 1] = point
+            self.root = buildTree(self.points, 0, nil)
+            return self
         end
 
         newNode = Node(point, (insertPosition.dimension + 1) % #self.dimensions, insertPosition)

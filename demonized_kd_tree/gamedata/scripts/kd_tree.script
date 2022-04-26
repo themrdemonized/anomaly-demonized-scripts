@@ -48,6 +48,10 @@ function kdTree(points, metric, dimensions)
         local median
         local node
 
+        if not new_points then
+            return
+        end
+
         if #new_points == 0 then
             -- printf("buildTree #new_points == 0")
             return
@@ -73,6 +77,11 @@ function kdTree(points, metric, dimensions)
     kd_tree.root = buildTree(points, 0, nil)
 
     kd_tree.insert = function(self, point)
+        if not self.root then
+            self.root = buildTree({point}, 0, nil)
+            return self
+        end
+
         local function innerSearch(node, parent)
 
             if node == nil then

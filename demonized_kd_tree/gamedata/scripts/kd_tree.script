@@ -39,7 +39,7 @@ end
 function kdTree(points, metric, dimensions)
     local kd_tree = {}
 
-    kd_tree.points = points
+    kd_tree.points = points or {}
     kd_tree.metric = metric
     kd_tree.dimensions = dimensions
 
@@ -77,7 +77,6 @@ function kdTree(points, metric, dimensions)
     kd_tree.root = buildTree(points, 0, nil)
 
     kd_tree.insertAndRebuild = function(self, point)
-        if not self.points then self.points = {} end
         self.points[#self.points + 1] = point
         self.root = buildTree(self.points, 0, nil)
         return self
@@ -103,7 +102,6 @@ function kdTree(points, metric, dimensions)
         local dimension
 
         if insertPosition == nil then
-            if not self.points then self.points = {} end
             self.points[#self.points + 1] = point
             self.root = buildTree(self.points, 0, nil)
             return self
@@ -117,6 +115,8 @@ function kdTree(points, metric, dimensions)
         else
             insertPosition.right = newNode
         end
+
+        self.points[#self.points + 1] = point
 
         return self
     end

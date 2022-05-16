@@ -1,0 +1,269 @@
+-- New Game Loadout Items Injector
+-- Based on Lucy's Glowsticks mod code for injecting glowsticks
+-- Written by demonized
+-- MCM IS REQUIRED TO WORK
+
+--[[
+
+For usage in your mod you have to create a script file with _mcm on the end
+for example, "my_best_mod_mcm.script"
+Then to add an item to loadout do something like this.
+Example below adds anomaly detector to loadouts
+All factions except ecologists should buy detector, ecologists have them for free on all difficulties
+In first or second economy difficulty, detector costs 150
+In third difficulty, detector costs 200
+
+-- Add anomaly detector to loadouts
+local loadouts = new_game_loadout_injector_mcm
+
+loadouts.add_item({
+	section = "detector_anomaly",
+	points = 150,
+	faction = {
+		"stalker",
+		"dolg",
+		"freedom",
+		"csky",
+		"killer",
+		"army",
+		"bandit",
+		"monolith",
+		"renegade",
+		"greh",
+		"isg",
+	},
+	economy = {
+		"st_econ_1",
+		"st_econ_2",
+	}
+})
+
+loadouts.add_item({
+	section = "detector_anomaly",
+	points = 200,
+	faction = {
+		"stalker",
+		"dolg",
+		"freedom",
+		"csky",
+		"killer",
+		"army",
+		"bandit",
+		"monolith",
+		"renegade",
+		"greh",
+		"isg",
+	},
+	economy = {
+		"st_econ_3"
+	}
+})
+
+loadouts.add_item({
+	section = "detector_anomaly",
+	points = 150,
+	faction = {
+		"ecolog",
+	},
+	add_to_inventory = true,
+})
+
+For all options see add_item function below in the script
+
+--]]
+
+--UTILS
+
+local function li_printf(str, ...)
+	printf("Loadout Injector: " .. str, ...)
+end
+
+local function li_printerr(str, ...)
+	printf("!Loadout Injector: ERROR, " .. str, ...)
+end
+
+local function table_to_dict(t)
+	local res = {}
+	local t = t or {}
+	for k, v in pairs(t) do
+		if type(v) == "string" then
+			res[v] = true
+		elseif v ~= false or v ~= nil then
+			res[k] = true
+		end
+	end
+	return res
+end
+
+local function dict_keys(t)
+	local res = {}
+	local t = t or {}
+	for k, v in pairs(t) do
+		res[#res + 1] = k
+	end
+
+	return res
+end
+
+-- Table of loadout items to inject
+loadout_items = {}
+
+--[[
+
+Function to add item to loadout
+Accepts table, where you define the properties of item to add
+The table can have these fields (mandatory or optional):
+	section: string, mandatory, defines item section to add,
+	points: int, optional, defines price of item in loadout, default is 0
+	amount: int, optional, defines amount of items to add, default is 1
+	faction: table of string, optional, defines which factions can have this item. Empty table or nil will allow everyone to have this item. Possible values in table: 
+		"stalker", (Loners)
+		"dolg", (Duty)
+		"freedom", (Freedom)
+		"csky", (Clear Sky)
+		"ecolog", (Ecologists)
+		"killer", (Mercenaries)
+		"army", (Military)
+		"bandit", (Bandits)
+		"monolith", (Monolith)
+		"renegade", (Renegades)
+		"greh", (Sin)
+		"isg", (UNISG)
+
+	economy: table of string, optional, defines which difficuly allows this item to appear. Empty table or nil will allow every economy to have this item. Possible values in table:
+		"st_econ_1", (Easy)
+		"st_econ_2", (Medium)
+		"st_econ_3"  (Hard)
+
+	add_to_inventory: boolean, optional, defines if item has to be added in inventory directly, immediately and for free, default is false
+
+--]]
+
+function add_item(item_table)
+	if not item_table or type(item_table) ~= "table" then
+		li_printerr("no item table provided")
+		return
+	end
+
+	if not item_table.section or not ini_sys:section_exist(tostring(item_table.section)) then
+		li_printerr("no section exists by name %s", item_table.section)
+		return
+	end
+
+	item_table.points = item_table.points and tonumber(item_table.points) or 0
+	item_table.amount = item_table.amount and tonumber(item_table.amount) or 1
+
+	if item_table.faction and type(item_table.faction) == "string" then
+		local s = item_table.faction
+		item_table.faction = {
+			[s] = true
+		}
+	else
+		item_table.faction = table_to_dict(item_table.faction)
+	end
+
+	if item_table.economy and type(item_table.economy) == "string" then
+		local s = item_table.economy
+		item_table.economy = {
+			[s] = true
+		}
+	else
+		item_table.economy = table_to_dict(item_table.economy)
+	end
+
+	li_printf(
+		"adding item %s, points %s, amount %s, faction %s, economy %s, to inventory %s",
+		item_table.section,
+		item_table.points,
+		item_table.amount,
+		is_empty(item_table.faction) and "all" or table.concat(dict_keys(item_table.faction), ";"),
+		is_empty(item_table.economy) and "all" or table.concat(dict_keys(item_table.economy), ";"),
+		item_table.add_to_inventory == true
+	)
+
+	loadout_items[item_table.section] = loadout_items[item_table.section] or {}
+	table.insert(loadout_items[item_table.section], item_table)
+end
+
+-- Removes items from loadout by section
+function remove_item(section)
+	local section = section or ""
+	loadout_items[section] = nil
+end
+
+_LoadLoadout = ui_mm_faction_select.UINewGame.LoadLoadout
+
+function ui_mm_faction_select.UINewGame.LoadLoadout(self, rand)
+	_LoadLoadout(self, rand)
+	
+	-- Copy existing loadout
+	local inv_sect_list = {}
+	local inv_point_list = {}
+	local i_size = 0
+	for idx,ci in pairs(self.CC["inventory"].cell) do
+		i_size = i_size + 1
+		inv_sect_list[i_size] = ci.section
+		inv_point_list[i_size] = 0
+	end
+	
+	-- Add items which are marked "add_to_inventory"
+	for k, v in pairs(loadout_items) do
+		for i, item_table in ipairs(v) do
+			if 	item_table.add_to_inventory
+			and (is_empty(item_table.faction) or item_table.faction[self.selected_faction])
+			and (is_empty(item_table.economy) or item_table.economy[self.selected_economy])
+			then
+				for j = 1, item_table.amount do
+					i_size = i_size + 1
+					inv_sect_list[i_size] = item_table.section
+					inv_point_list[i_size] = 0
+				end
+			end
+		end
+	end
+	
+	-- Load the existing faction "shop"
+	i_size = 0
+	local load_sect_list = {}
+	local load_point_list = {}
+	for idx,ci in pairs(self.CC["loadout"].cell) do
+		i_size = i_size + 1
+		load_sect_list[i_size] = ci.section
+		load_point_list[i_size] = ci.flags.info or 0
+	end
+
+	-- Add items to loadout shop
+	for k, v in pairs(loadout_items) do
+		for i, item_table in ipairs(v) do
+			if 	not item_table.add_to_inventory
+			and (is_empty(item_table.faction) or item_table.faction[self.selected_faction])
+			and (is_empty(item_table.economy) or item_table.economy[self.selected_economy])
+			then
+				for j = 1, item_table.amount do
+					i_size = i_size + 1
+					load_sect_list[i_size] = item_table.section
+					load_point_list[i_size] = item_table.points
+				end
+			end
+		end
+	end
+	
+	-- Reinit inventories to apply the changes
+	self.CC["inventory"]:Reinit(inv_sect_list, inv_point_list)
+	for idx,ci in pairs(self.CC["inventory"].cell) do
+		if ci:IsShown() then
+			local val = ci.flags.info or 0
+			ci.flags.value = val
+			ci.flags.value_str = game.translate_string("st_mm_new_game_points") .. ": " .. val
+		end
+	end
+	
+	self.CC["loadout"]:Reinit(load_sect_list, load_point_list)
+	for idx,ci in pairs(self.CC["loadout"].cell) do
+		if ci:IsShown() then
+			local val = ci.flags.info or 0
+			ci.flags.value = val
+			ci.flags.value_str = game.translate_string("st_mm_new_game_points") .. ": " .. val
+		end
+	end
+end

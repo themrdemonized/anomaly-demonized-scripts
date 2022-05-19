@@ -108,6 +108,9 @@ end
 -- Table of loadout items to inject
 loadout_items = {}
 
+-- Table of loadout items to remove
+loadout_removed_items = {}
+
 --[[
 
 Function to add item to loadout
@@ -185,10 +188,22 @@ function add_item(item_table)
 	table.insert(loadout_items[item_table.section], item_table)
 end
 
--- Removes items from loadout by section
+-- Removes added items from loadout by section
 function remove_item(section)
 	local section = section or ""
+	if not ini_sys:section_exist(tostring(section)) then
+		li_printerr("can't remove %s, no section exists", section)
+	end
 	loadout_items[section] = nil
+end
+
+-- Removes existing items loaded from ltx from loadout by section
+function remove_existing_item(section)
+	local section = section or ""
+	if not ini_sys:section_exist(tostring(section)) then
+		li_printerr("can't remove %s, no section exists", section)
+	end
+	loadout_removed_items[section] = true
 end
 
 _LoadLoadout = ui_mm_faction_select.UINewGame.LoadLoadout
@@ -201,9 +216,11 @@ function ui_mm_faction_select.UINewGame.LoadLoadout(self, rand)
 	local inv_point_list = {}
 	local i_size = 0
 	for idx,ci in pairs(self.CC["inventory"].cell) do
-		i_size = i_size + 1
-		inv_sect_list[i_size] = ci.section
-		inv_point_list[i_size] = 0
+		if not loadout_removed_items[ci.section] then
+			i_size = i_size + 1
+			inv_sect_list[i_size] = ci.section
+			inv_point_list[i_size] = 0
+		end
 	end
 	
 	-- Add items which are marked "add_to_inventory"
@@ -227,9 +244,11 @@ function ui_mm_faction_select.UINewGame.LoadLoadout(self, rand)
 	local load_sect_list = {}
 	local load_point_list = {}
 	for idx,ci in pairs(self.CC["loadout"].cell) do
-		i_size = i_size + 1
-		load_sect_list[i_size] = ci.section
-		load_point_list[i_size] = ci.flags.info or 0
+		if not loadout_removed_items[ci.section] then
+			i_size = i_size + 1
+			load_sect_list[i_size] = ci.section
+			load_point_list[i_size] = ci.flags.info or 0
+		end
 	end
 
 	-- Add items to loadout shop

@@ -20,7 +20,7 @@ local M_PI_2 = M_PI * 2
 -- If magnitude is number and > 1, then random values will be closer to min_cond
 -- If magnitude is number and < 1, then random values will be closer to max_cond
 -- If magnitude is easing function, then random value will be picked according to function graph
--- For more info on easing function, google easing or cubic-bezier functions
+-- For more info on easing function, google easing or cubic-bezier functions or look here: https://github.com/bbor/stingray-easing-functions
 
 function get_random_value(min_cond, max_cond, magnitude)
 	local min_cond = min_cond or 0

@@ -19,6 +19,7 @@ local pairs = pairs
 local unpack = unpack
 
 local tg = 0
+local i = 1
 
 local function print_table(table, subs)
 	
@@ -149,7 +150,12 @@ end
 
 local function remove_ev_queue(ev_id, act_id)
 	local pos = find_ev_queue(ev_id, act_id)
-	if pos then return table_remove(computed_ev_queue, pos) end
+	if pos then
+		if pos <= i then
+			i = i - 1
+		end
+		return table_remove(computed_ev_queue, pos)
+	end
 end
 
 function CreateTimeEvent(ev_id,act_id,timer,f,...)
@@ -208,7 +214,9 @@ function ProcessEventQueue(force)
 	-- end
 
 	local force_refresh
-	for i = 1, #computed_ev_queue do
+	i = 1
+	local l = #computed_ev_queue
+	while i <= l do
 		local t = computed_ev_queue[i] or (function()
 			force_refresh = true
 			return { timer = math_huge }
@@ -230,6 +238,7 @@ function ProcessEventQueue(force)
 				act_id = t.act_id
 			}
 		end
+		i = i + 1
 	end
 
 	if force_refresh then
@@ -239,6 +248,7 @@ function ProcessEventQueue(force)
 		for i = 1, #to_remove do
 			local t = to_remove[i]
 			remove_ev_queue(t.ev_id, t.act_id)
+			to_remove[i] = nil
 		end
 		empty_table(to_remove)
 	end

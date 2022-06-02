@@ -184,6 +184,12 @@ function CircularEaseOut(p)
 	return sqrt((2 - p) * p)
 end
 
+-- CircularEaseOut with adjustable power
+function CircularEaseOutPowered(p, power)
+	local power = power or 0.5
+	return ((2 - p) * p) ^ power
+end
+
 -- Modeled after the piecewise circular function
 -- y = (1/2)(1 - sqrt(1 - 4x^2))            [0, 0.5)
 -- y = (1/2)(sqrt(-(2x - 3)*(2x - 1)) + 1)  [0.5, 1]

@@ -24,6 +24,55 @@ local function table_slice(t, first, last)
     return res
 end
 
+-- http://lua-users.org/wiki/BinaryInsert
+local function binary_insert(t, value, fcomp)
+    -- Initialise compare function
+    local fcomp = fcomp or function(a, b) return a < b end
+
+    -- print_table(value)
+
+    --  Initialise numbers
+    local iStart, iEnd, iMid, iState = 1, #t, 1, 0
+
+    if iEnd == 0 then
+        t[1] = value
+        -- printf("adding in beginning table empty")
+        return 1
+    end
+
+    if fcomp(value, t[1]) then
+        -- printf("adding in beginning %s of %s", 1, iEnd)
+        table_insert(t, 1, value)
+        return 1
+    end
+
+    if not fcomp(value, t[iEnd]) then
+        -- printf("adding in end %s of %s", iEnd + 1, iEnd)
+        local pos = iEnd + 1
+        t[pos] = value
+        return pos
+    end
+
+    -- Get insert position
+    while iStart <= iEnd do
+
+        -- calculate middle
+        iMid = math_floor((iStart + iEnd) / 2)
+
+        -- compare
+        if fcomp(value, t[iMid]) then
+            iEnd, iState = iMid - 1, 0
+        else
+            iStart, iState = iMid + 1, 1
+        end
+    end
+
+    local pos = iMid + iState
+    -- printf("adding in middle %s of %s", pos, iEnd)
+    table_insert(t, pos, value)
+    return pos
+end
+
 function Node(obj, dimension, parent)
     local node = {}
 
@@ -243,6 +292,37 @@ function kdTree(points, metric, dimensions)
         return self
     end
 
+    -- get all points sorted by nearest
+    kd_tree.nearestAll = function(self, point)
+        local point = {
+            x = point.x or point[1],
+            y = point.y or point[2],
+            z = point.z or point[3]
+        }
+
+        local function comp_function(a, b)
+            return a[2] < b[2]
+        end
+
+        local res = {}
+        for i = 1, #self.points do
+            local v = self.points[i]
+            local t = {
+                [1] = {
+                    x = v.x,
+                    y = v.y,
+                    z = v.z,
+                    data = v.data
+                },
+                [2] = math.huge
+            }
+            t[2] = self.metric(t[1], point)
+            binary_insert(res, t, comp_function)
+        end
+        
+        return res
+    end
+
     -- Query the nearest *count* neighbours to a point, with an optional
     -- maximal search distance.
     -- Result is an array with *count* elements.
@@ -262,55 +342,6 @@ function kdTree(points, metric, dimensions)
         local function comp_function(a, b) 
             return a[2] < b[2]
         end 
-
-        -- http://lua-users.org/wiki/BinaryInsert
-        local function binary_insert(t, value, fcomp)
-            -- Initialise compare function
-            local fcomp = fcomp or function(a, b) return a < b end
-
-            -- print_table(value)
-
-            --  Initialise numbers
-            local iStart, iEnd, iMid, iState = 1, #t, 1, 0
-
-            if iEnd == 0 then
-                t[1] = value
-                -- printf("adding in beginning table empty")
-                return 1
-            end
-
-            if fcomp(value, t[1]) then
-                -- printf("adding in beginning %s of %s", 1, iEnd)
-                table_insert(t, 1, value)
-                return 1
-            end
-
-            if not fcomp(value, t[iEnd]) then
-                -- printf("adding in end %s of %s", iEnd + 1, iEnd)
-                local pos = iEnd + 1
-                t[pos] = value
-                return pos
-            end
-
-            -- Get insert position
-            while iStart <= iEnd do
-
-                -- calculate middle
-                iMid = math_floor((iStart + iEnd) / 2)
-
-                -- compare
-                if fcomp(value, t[iMid]) then
-                    iEnd, iState = iMid - 1, 0
-                else
-                    iStart, iState = iMid + 1, 1
-                end
-            end
-
-            local pos = iMid + iState
-            -- printf("adding in middle %s of %s", pos, iEnd)
-            table_insert(t, pos, value)
-            return pos
-        end
 
         local function saveNode(node, distance)
             binary_insert(bestNodes, {node, distance}, comp_function)

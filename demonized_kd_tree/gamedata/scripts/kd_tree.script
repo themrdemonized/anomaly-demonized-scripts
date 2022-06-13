@@ -307,7 +307,7 @@ function kdTree(points, metric, dimensions)
         local res = {}
         for i = 1, #self.points do
             local v = self.points[i]
-            local t = {
+            res[i] = {
                 [1] = {
                     x = v.x,
                     y = v.y,
@@ -316,9 +316,9 @@ function kdTree(points, metric, dimensions)
                 },
                 [2] = math.huge
             }
-            t[2] = self.metric(t[1], point)
-            binary_insert(res, t, comp_function)
+            res[i][2] = self.metric(res[i][1], point)
         end
+        table_sort(res, comp_function)
         
         return res
     end
@@ -400,7 +400,7 @@ function kdTree(points, metric, dimensions)
 
         if maxDistance then
             for i = 1, maxNodes do
-                binary_insert(bestNodes, {nil, maxDistance}, comp_function)
+                bestNodes[i] = {nil, maxDistance}
             end
         end
 
@@ -409,10 +409,9 @@ function kdTree(points, metric, dimensions)
         end
 
         result = {}
-
         for i = 1, math_min(maxNodes, #bestNodes) do
             if bestNodes[i][1] then
-                result[#result + 1] = {
+                result[i] = {
                     bestNodes[i][1].obj,
                     bestNodes[i][2]
                 }

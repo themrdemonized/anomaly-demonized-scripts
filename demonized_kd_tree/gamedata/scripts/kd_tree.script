@@ -411,7 +411,7 @@ function kdTree(points, metric, dimensions)
         result = {}
         for i = 1, math_min(maxNodes, #bestNodes) do
             if bestNodes[i][1] then
-                result[i] = {
+                result[#result + 1] = {
                     bestNodes[i][1].obj,
                     bestNodes[i][2]
                 }

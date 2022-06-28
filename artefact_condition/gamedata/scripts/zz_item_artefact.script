@@ -48,7 +48,7 @@ item_artefact.artefact_binder.update = function(self, delta)
 		local se_obj = alife_object(self.object:id())
 		if (se_obj) then
 			local m_data = alife_storage_manager.get_se_obj_state(se_obj, true)
-			if (m_data and m_data.offline_condition) then
+			if (m_data and m_data.offline_condition and m_data.name == self.object:name()) then
 				printf("loaded condition for %s "..tonumber(m_data.offline_condition), se_obj:section_name())
 				self.object:set_condition(tonumber(m_data.offline_condition) or 0.9999999)
 				--m_data.offline_condition = nil
@@ -139,6 +139,7 @@ se_artefact.se_artefact.on_register = function(self)
     story_objects.check_spawn_ini_for_story_id(self)
     
     -- persistent storage
+    printf("adding %s, %s to se_obj state", self.id, self:name())
     alife_storage_manager.get_se_obj_state(self,true)
 
     SendScriptCallback("server_entity_on_register",self,"se_artefact")
@@ -146,7 +147,8 @@ end
 
 se_artefact.se_artefact.on_unregister = function(self)
     local m_data = alife_storage_manager.get_state()
-    if (m_data.se_object) then
+    if (m_data.se_object and m_data.se_object[self.id]) then
+    	printf("clearing object %s, %s from m_data", self.id, self:name())
         m_data.se_object[self.id] = nil
     end
     unregister_story_object_by_id(self.id)

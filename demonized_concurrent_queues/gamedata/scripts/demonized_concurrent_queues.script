@@ -22,6 +22,7 @@ end
 --    func - function for processing, must have at least first 3 arguments: key of queue_table, value by that key, the number of key in processing order
 --	  returning true will remove element from queue, returning false or nil will leave it in queue for next process cycle
 --	  on_end_func - function at the end of queue processing, you can use this for chaining queue processing one after another
+--	  step - amount of items in queue to process at a time
 --    ... - additional arguments for "func"
 -- active_queues table contains names of queues that are active.
 
@@ -43,7 +44,7 @@ process_queue("my_queue", ids, function(k, id, i)
 ]]
 
 active_queues = {}
-function process_queue(queue_name, queue_table, func, on_end_func, ...)
+function process_queue(queue_name, queue_table, func, on_end_func, step, ...)
 	-- queue_table must be a table
 	if not queue_table or type(queue_table) ~= "table" then
 		printf("%s is not table, abort", queue_table)
@@ -58,22 +59,27 @@ function process_queue(queue_name, queue_table, func, on_end_func, ...)
 	-- Collect table keys and initialize the table index
 	local i = 1
 	local keys = table_keys(queue_table)
+	local step = clamp(step or 1, 1, #keys)
 
 	local args = {...}
 	local update_func
 	update_func = function()
-		local j = keys[i]
-		if func(j, queue_table[j], i, unpack(args)) == true then
-			queue_table[j] = nil
-			table_remove(keys, i)
-			i = i - 1
+		for s = 1, step do
+			local j = keys[i]
+			if func(j, queue_table[j], i, unpack(args)) == true then
+				queue_table[j] = nil
+				table_remove(keys, i)
+				i = i - 1
+				step = math.min(step, #keys)
+			end
+			if not keys[1] then
+				if on_end_func then on_end_func() end
+				UnregisterScriptCallback("actor_on_update", update_func)
+				active_queues[queue_name] = nil
+				return
+			end
+			i = i == #keys and 1 or i + 1
 		end
-		if not keys[1] then
-			if on_end_func then on_end_func() end
-			UnregisterScriptCallback("actor_on_update", update_func)
-			active_queues[queue_name] = nil
-		end
-		i = i == #keys and 1 or i + 1
 	end
 	active_queues[queue_name] = {
 		queue_table = queue_table,

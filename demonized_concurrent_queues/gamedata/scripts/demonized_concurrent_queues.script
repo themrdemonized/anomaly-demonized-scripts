@@ -70,7 +70,7 @@ function process_queue(queue_name, queue_table, func, on_end_func, step, ...)
 				queue_table[j] = nil
 				table_remove(keys, i)
 				i = i - 1
-				step = math.min(step, #keys)
+				step = clamp(step, 1, #keys)
 			end
 			if not keys[1] then
 				if on_end_func then on_end_func() end

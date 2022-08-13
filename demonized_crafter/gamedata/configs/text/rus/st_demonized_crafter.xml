@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<string id="st_demonized_crafter">
+		<text>скрафтить</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_success">
+		<text>Создано:</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_spent_items">
+		<text>Использованные предметы</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_fail">
+		<text>Не удалось создать</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_possible_combinations">
+		<text>Возможные комбинации</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_or">
+		<text>ИЛИ</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_all">
+		<text>все</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_check_pda_news">
+		<text>Рецепты крафта в ПДА во вкладке "Новости"</text>
+	</string>
+
+</string_table>

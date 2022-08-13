@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<string id="st_demonized_crafter">
+		<text>craft</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_success">
+		<text>Crafted</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_spent_items">
+		<text>Used items</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_fail">
+		<text>Failed to craft</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_possible_combinations">
+		<text>Possible combinations</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_or">
+		<text>OR</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_all">
+		<text>all</text>
+	</string>
+
+	<string id="st_demonized_crafter_craft_check_pda_news">
+		<text>Check recipes in PDA in "News" tab</text>
+	</string>
+
+</string_table>

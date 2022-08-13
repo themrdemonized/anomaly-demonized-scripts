@@ -85,6 +85,7 @@ function process_queue(queue_name, queue_table, func, on_end_func, step, ...)
 		queue_table = queue_table,
 		func = update_func,
 		on_end_func = on_end_func,
+		step = step,
 	}
 	RegisterScriptCallback("actor_on_update", update_func)
 end

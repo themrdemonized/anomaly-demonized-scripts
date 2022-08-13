@@ -8,7 +8,7 @@
 	Crafting recipes
 	The structure of crafting recipes is
 		tool
-			item
+			item:amount
 				recipe1
 				recipe2
 				...
@@ -137,6 +137,7 @@ function add_craft_recipe(craft_recipe_table, before)
 		end
 	end
 	refresh_craft_menu()
+	return craft_recipes
 end
 
 function remove_craft_recipe(craft_recipe_table)
@@ -169,6 +170,7 @@ function remove_craft_recipe(craft_recipe_table)
 		end
 	end
 	refresh_craft_menu()
+	return craft_recipes
 end
 
 function remove_all_recipes_for_tool(tool)
@@ -178,6 +180,7 @@ function remove_all_recipes_for_tool(tool)
 	end
 	craft_recipes[tool] = nil
 	refresh_craft_menu()
+	return craft_recipes
 end
  
 -- This function expands craft recipes in a way that any item in recipe is considered a tool and can invoke right click menu
@@ -192,6 +195,9 @@ function add_craft_menu(recipe_table)
 	for tool, items in pairs(recipe_table) do
 		for item, recipes in pairs(items) do
 			local result_item = item
+			local result_item_props = str_explode(result_item, ":")
+			result_item = result_item_props[1]
+			local result_item_amount = result_item_props[2] and tonumber(result_item_props[2]) or 1
 			local craft_func = {
 				check = function(obj, bag, mode)
 					-- Check tool
@@ -205,12 +211,12 @@ function add_craft_menu(recipe_table)
 				end,
 				str = function(obj, bag, mode)
 					-- Return craft string + item name to craft
-					local item_name = ui_item.get_sec_name(item)
+					local item_name = ui_item.get_sec_name(result_item)
 
 					-- Enable multicraft is shift was held while right clicking
 					multi_craft = holding_shift
 
-					return gc(craft_func_key) .. (holding_shift and (" " .. gc(craft_func_key .. "_craft_all")) or "") .. ": " .. item_name
+					return gc(craft_func_key) .. (multi_craft and (" " .. gc(craft_func_key .. "_craft_all")) or "") .. ": " .. item_name .. (result_item_amount > 1 and not multi_craft and (", " .. result_item_amount) or "")
 				end,
 				func = function(obj, bag, mode)
 					-- Parse recipe table
@@ -330,15 +336,18 @@ function add_craft_menu(recipe_table)
 										end
 									end
 								end
-								alife_create_item(result_item, db.actor)
 
-								crafted_amount = crafted_amount + 1
-								crafted = true
+								for i = 1, result_item_amount do
+									alife_create_item(result_item, db.actor)
+
+									crafted_amount = crafted_amount + 1
+									crafted = true
+								end
 
 								-- Play camera animation
 								if not multi_craft then
 									-- Print what is crafted and what items were consumed
-									local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(ui_item.get_sec_name(result_item)) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
+									local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(ui_item.get_sec_name(result_item) .. (crafted_amount > 1 and (", " .. crafted_amount) or "")) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
 									for recipe_item, recipe_amount in pairs(r) do
 										tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount))
 									end
@@ -370,7 +379,7 @@ function add_craft_menu(recipe_table)
 					end
 
 					-- If cant craft - print tip of possible recipes and required amount
-					local failed_tip_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(ui_item.get_sec_name(result_item)) .. " \\n" .. gc(craft_func_key .. "_craft_possible_combinations") .. ": "
+					local failed_tip_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(ui_item.get_sec_name(result_item) .. (result_item_amount > 1 and (", " .. result_item_amount) or "")) .. " \\n" .. gc(craft_func_key .. "_craft_possible_combinations") .. ": "
 					for i, v in ipairs(spent_items) do
 						for recipe_item, recipe_amount in pairs(v) do
 							failed_tip_string = failed_tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " ..
@@ -406,6 +415,12 @@ function add_craft_menu(recipe_table)
 						end
 					end
 					print_tip(failed_tip_string)
+
+					-- Print generic message if there are too much recipes
+					if #recipes > 2 then
+						local failed_tip_small_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(ui_item.get_sec_name(result_item) .. (result_item_amount > 1 and (", " .. result_item_amount) or "")) .. " \\n" .. gc(craft_func_key .. "_craft_check_pda_news")
+						print_tip(failed_tip_small_string)
+					end
 				end
 			}
 			add_functor(craft_func_key .. "_" .. tool .. "_" .. result_item, craft_func.check, craft_func.str, nil, craft_func.func, true)

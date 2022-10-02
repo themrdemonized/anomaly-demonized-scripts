@@ -8,10 +8,11 @@
 	Crafting recipes
 	The structure of crafting recipes is
 		tool
-			item:amount
+			item1:amount1, (item2:amount2_min-amount2_max), ...
 				recipe1
 				recipe2
 				...
+	Tool can craft multiple items at once per entry (item1, item2), different amount of items (item1:amount1) or randomized amount of items between min and max (item2:amount2_min-amount2_max)
 	Recipes has form of "item1:amount1,item2:amount2,..."
 	Order of recipe matters, first one possible to use will be used
 	You can omit amount if you except 1 item to be consumed, ie.
@@ -21,13 +22,13 @@
 	Example of crafting recipes table
 	craft_recipes = {
 		vodka = {
-			molotov_cocktail = {
+			["molotov_cocktail"] = {
 				"vodka,box_matches,prt_i_paper",
 				"vodka:1,box_matches:1,prt_o_fabrics_1:1",
 			},
 		},
 		vodka2 = {
-			molotov_cocktail = {
+			["molotov_cocktail:2, prt_i_paper:1-2"] = {
 				"vodka2:1,box_matches:1,prt_i_paper:1",
 				"vodka2:1,box_matches:1,prt_o_fabrics_1:1",
 			},
@@ -101,8 +102,27 @@ local function table_find(t, el)
 	end
 end
 
-function is_degradable(sec)
-	return utils_item.is_degradable(nil, sec) and SYS_GetParam(2, sec, "degradation_factor")
+local degradable_cache = {}
+function is_degradable(sec, obj)
+	if degradable_cache[sec] ~= nil then
+		return degradable_cache[sec]
+	end
+
+	local res
+	local function degradable()
+		return utils_item.is_degradable(nil, sec) and not IsItem("part", sec)
+	end
+
+	if obj then
+		sec = obj:section()
+		res = degradable() or IsWeapon(obj) or IsOutfit(obj) or IsHeadgear(obj) or IsArtefact(obj)
+	else
+		res = degradable()
+	end
+
+	-- Cast to boolean
+	degradable_cache[sec] = not not res
+	return degradable_cache[sec]
 end
 
 local holding_shift = false
@@ -195,9 +215,43 @@ function add_craft_menu(recipe_table)
 	for tool, items in pairs(recipe_table) do
 		for item, recipes in pairs(items) do
 			local result_item = item
-			local result_item_props = str_explode(result_item, ":")
-			result_item = result_item_props[1]
-			local result_item_amount = result_item_props[2] and tonumber(result_item_props[2]) or 1
+			local result_item_table = {}
+
+			for i, v in ipairs(str_explode(result_item, ",")) do
+				local s = str_explode(v, ":")
+				local res = { section = s[1] }
+				if s[2] then
+					if s[2]:find("-") then
+						local r = str_explode(s[2], "-")
+						res.amount = function()
+							return math.random(r[1], r[2])
+						end
+						res.amount_str = s[2]
+					else
+						res.amount = function() return tonumber(s[2]) end
+						res.amount_str = s[2]
+					end
+				else
+					res.amount = function() return 1 end
+					res.amount_str = 1
+				end
+				table.insert(result_item_table, res)
+			end
+
+			local function print_result_items()
+				local s = ""
+				for i, v in ipairs(result_item_table) do
+					-- Return craft string + item name to craft
+					local item_name = ui_item.get_sec_name(v.section)
+					local amount = v.amount_str
+					s = s .. item_name
+					if i ~= #result_item_table then
+						s = s .. ", "
+					end
+				end
+				return s
+			end
+
 			local craft_func = {
 				check = function(obj, bag, mode)
 					-- Check tool
@@ -206,17 +260,16 @@ function add_craft_menu(recipe_table)
 					}
 					local bags = {
 						["actor_bag"] = true,
+						["actor_equ"] = true,
+						["actor_belt"] = true,
 					}
 					return obj:section() == tool and modes[mode] and bags[bag]
 				end,
 				str = function(obj, bag, mode)
-					-- Return craft string + item name to craft
-					local item_name = ui_item.get_sec_name(result_item)
-
 					-- Enable multicraft is shift was held while right clicking
 					multi_craft = holding_shift
 
-					return gc(craft_func_key) .. (multi_craft and (" " .. gc(craft_func_key .. "_craft_all")) or "") .. ": " .. item_name .. (result_item_amount > 1 and not multi_craft and (", " .. result_item_amount) or "")
+					return gc(craft_func_key) .. (multi_craft and (" " .. gc(craft_func_key .. "_craft_all")) or "") .. ": " .. print_result_items()
 				end,
 				func = function(obj, bag, mode)
 					-- Parse recipe table
@@ -256,7 +309,7 @@ function add_craft_menu(recipe_table)
 						end
 						if IsItem("multiuse", sec) then
 							inventory_items[sec][obj:id()] = obj:get_remaining_uses()
-						elseif is_degradable(sec) then
+						elseif is_degradable(sec, obj) then
 							inventory_items[sec][obj:id()] = round_idp(obj:condition(), 2)
 						else
 							inventory_items[sec][obj:id()] = 1
@@ -264,7 +317,7 @@ function add_craft_menu(recipe_table)
 					end
 
 					if IsStalker(actor) then
-						actor:iterate_ruck(iterate, actor)
+						actor:iterate_inventory(iterate, actor)
 					elseif IsInvbox(actor) then
 						actor:iterate_inventory_box(iterate, actor)
 					else
@@ -285,8 +338,22 @@ function add_craft_menu(recipe_table)
 					-- Check recipes for possibility to craft
 					local can_craft_at_all = true
 					local crafted_amount = 0
+					local crafted_items = {}
 					local spent_items = {}
 					local wasted_items = {}
+
+					local function print_crafted_items()
+						local s = ""
+						local sep = ", "
+						for k, v in pairs(crafted_items) do
+							local item_name = ui_item.get_sec_name(k)
+							local amount = v
+							s = s .. item_name .. ":" .. amount .. sep
+						end
+						s = s:sub(1, -(sep:len() + 1))
+						return s
+					end
+
 					repeat
 						can_craft_at_all = true
 						empty_table(spent_items)
@@ -316,7 +383,7 @@ function add_craft_menu(recipe_table)
 											break
 										end
 
-										if is_degradable(recipe_item) then
+										if is_degradable(recipe_item, level.object_by_id(id)) then
 											utils_item.degrade(level.object_by_id(id), recipe_amount)
 										elseif amount < recipe_amount then
 											alife_release_id(id)
@@ -337,17 +404,25 @@ function add_craft_menu(recipe_table)
 									end
 								end
 
-								for i = 1, result_item_amount do
-									alife_create_item(result_item, db.actor)
+								for i, v in ipairs(result_item_table) do
+									local result_item = v.section
+									local amount = v.amount()
+									if not crafted_items[result_item] then
+										crafted_items[result_item] = 0
+									end
+									crafted_items[result_item] = crafted_items[result_item] + amount
+									for j = 1, amount do
+										alife_create_item(result_item, db.actor)
 
-									crafted_amount = crafted_amount + 1
-									crafted = true
+										crafted_amount = crafted_amount + 1
+										crafted = true
+									end
 								end
 
 								-- Play camera animation
 								if not multi_craft then
 									-- Print what is crafted and what items were consumed
-									local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(ui_item.get_sec_name(result_item) .. (crafted_amount > 1 and (", " .. crafted_amount) or "")) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
+									local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(print_crafted_items()) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
 									for recipe_item, recipe_amount in pairs(r) do
 										tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount))
 									end
@@ -367,7 +442,7 @@ function add_craft_menu(recipe_table)
 					if crafted_amount > 0 then
 
 						-- Print what is crafted and what items were consumed
-						local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(ui_item.get_sec_name(result_item)) .. ", " .. colorize(crafted_amount) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
+						local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(print_crafted_items()) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
 						for recipe_item, recipe_amount in pairs(wasted_items) do
 							tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount))
 						end
@@ -379,7 +454,7 @@ function add_craft_menu(recipe_table)
 					end
 
 					-- If cant craft - print tip of possible recipes and required amount
-					local failed_tip_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(ui_item.get_sec_name(result_item) .. (result_item_amount > 1 and (", " .. result_item_amount) or "")) .. " \\n" .. gc(craft_func_key .. "_craft_possible_combinations") .. ": "
+					local failed_tip_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(print_result_items()) .. " \\n" .. gc(craft_func_key .. "_craft_possible_combinations") .. ": "
 					for i, v in ipairs(spent_items) do
 						for recipe_item, recipe_amount in pairs(v) do
 							failed_tip_string = failed_tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " ..
@@ -418,7 +493,7 @@ function add_craft_menu(recipe_table)
 
 					-- Print generic message if there are too much recipes
 					if #recipes > 2 then
-						local failed_tip_small_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(ui_item.get_sec_name(result_item) .. (result_item_amount > 1 and (", " .. result_item_amount) or "")) .. " \\n" .. gc(craft_func_key .. "_craft_check_pda_news")
+						local failed_tip_small_string = bad_color .. gc(craft_func_key .. "_craft_fail") .. text_color .. " " .. colorize(print_result_items()) .. " \\n" .. gc(craft_func_key .. "_craft_check_pda_news")
 						print_tip(failed_tip_small_string)
 					end
 				end

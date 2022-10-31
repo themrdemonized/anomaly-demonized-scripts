@@ -18,6 +18,7 @@
 	You can omit amount if you except 1 item to be consumed, ie.
 	vodka,box_matches,prt_i_paper is equivalent to vodka:1,box_matches:1,prt_i_paper:1
 	Tools that use condition can be written as "item1:0.2" to degrade 20% of item 
+	It is possible to consume the whole tool if it has at least a condition specified in a recipe. To enable that, tool can be written as "item1>0.2". The ">", ">=", "<", "<=" comparisons are supported.
 
 	Example of crafting recipes table
 	craft_recipes = {
@@ -35,9 +36,19 @@
 		}
 	}
 
-	To add a crafting recipe, use function demonized_crafter.add_craft_recipe(craft_recipe_table, before)
+	To add a crafting recipe, use function demonized_crafter.add_craft_recipe(craft_recipe_table, args)
 	craft_recipe_table is the table with the structure as above
-	before tells to add recipes before existing ones, default is false
+	args is optional table and specifies additional arguments to craft menu. Possible table fields in args table are:
+		before - boolean, tells to add recipe before existing ones
+		craft_strings - table, contains string ids that will act as replacements for default "Craft: <item>" string in menu, have same structure as craft_recipe_table, for example:
+			{
+				vodka = {
+					molotov_cocktail = "st_make_molotov"
+				},
+				vodka2 = {
+					molotov_cocktail = "st_make_molotov"
+				},
+			}
 
 	To remove recipes use function demonized_crafter.remove_craft_recipe(craft_recipe_table)
 	craft_recipe_table is the table with the structure as above
@@ -130,10 +141,12 @@ local multi_craft = false
 local craft_func_key = "st_demonized_crafter" -- DONT CHANGE THIS!!
 
 craft_recipes = {}
+craft_item_strings = {}
 
 -- Helper functions to add and remove recipes
 -- They accept same table structure as described above
-function add_craft_recipe(craft_recipe_table, before)
+function add_craft_recipe(craft_recipe_table, args)
+	if not args then args = {} end
 	for tool, items in pairs(craft_recipe_table) do
 		if not craft_recipes[tool] then
 			craft_recipes[tool] = items
@@ -145,7 +158,7 @@ function add_craft_recipe(craft_recipe_table, before)
 					for _, recipe in ipairs(recipes) do
 						local recipe = string.gsub(recipe, ":1", "")
 						if not table_find(craft_recipes[tool][item], recipe) then
-							if before then
+							if args.before then
 								table.insert(craft_recipes[tool][item], 1, recipe)
 							else
 								table.insert(craft_recipes[tool][item], recipe)
@@ -153,6 +166,16 @@ function add_craft_recipe(craft_recipe_table, before)
 						end
 					end
 				end
+			end
+		end
+	end
+	if args.craft_strings then
+		for tool, items in pairs(args.craft_strings) do
+			if not craft_item_strings[tool] then
+				craft_item_strings[tool] = {}
+			end
+			for item, str in pairs(items) do
+				craft_item_strings[tool][item] = str
 			end
 		end
 	end
@@ -166,6 +189,9 @@ function remove_craft_recipe(craft_recipe_table)
 		if craft_recipes[tool] then
 			for item, recipes in pairs(items) do
 				if craft_recipes[tool][item] then
+					if craft_item_strings[tool] then
+						craft_item_strings[tool][item] = nil
+					end
 					for _, recipe in ipairs(recipes) do
 						local pos = table_find(craft_recipes[tool][item], recipe)
 						if pos then
@@ -269,31 +295,52 @@ function add_craft_menu(recipe_table)
 					-- Enable multicraft is shift was held while right clicking
 					multi_craft = holding_shift
 
-					return gc(craft_func_key) .. (multi_craft and (" " .. gc(craft_func_key .. "_craft_all")) or "") .. ": " .. print_result_items()
+					if craft_item_strings[tool] and craft_item_strings[tool][item] then
+						return gc(craft_item_strings[tool][item])
+					else
+						return gc(craft_func_key) .. (multi_craft and (" " .. gc(craft_func_key .. "_craft_all")) or "") .. ": " .. print_result_items()
+					end
 				end,
 				func = function(obj, bag, mode)
 					-- Parse recipe table
 					local res = {}
 					local craft_items = {}
+					local craft_item_modes = {}
 					for _, recipe in ipairs(recipes) do
 						local t = {}
 						for _, m in pairs(str_explode(trim(recipe), ",")) do
-							local material = str_explode(m, ":")
-							if not t[material[1]] then
-								t[material[1]] = 0
-							end
+							if m:find("[<>]") then
+								local material_data = {m:match("(.*)([<>][=]*)(.*)")}
+								local material = material_data[1]
+								local func = material_data[2]
+								local amount = material_data[3] and tonumber(material_data[3]) or 1
+								if not t[material] then
+									t[material] = amount
+								end
 
-							if not craft_items[material[1]] then
-								craft_items[material[1]] = 0
-							end
+								if not craft_items[material] then
+									craft_items[material] = amount
+								end
 
-							if not material[2] then
-								material[2] = 1
-							end
+								craft_item_modes[material] = {func, amount}
+							else
+								local material = str_explode(m, ":")
+								if not t[material[1]] then
+									t[material[1]] = 0
+								end
 
-							material[2] = tonumber(material[2])
-							t[material[1]] = t[material[1]] + material[2]
-							craft_items[material[1]] = craft_items[material[1]] + material[2]
+								if not craft_items[material[1]] then
+									craft_items[material[1]] = 0
+								end
+
+								if not material[2] then
+									material[2] = 1
+								end
+
+								material[2] = tonumber(material[2])
+								t[material[1]] = t[material[1]] + material[2]
+								craft_items[material[1]] = craft_items[material[1]] + material[2]
+							end
 						end
 						res[#res + 1] = t
 					end
@@ -354,6 +401,16 @@ function add_craft_menu(recipe_table)
 						return s
 					end
 
+					local function craft_item_mode_check(craft_item_mode, inv_amount)
+						local t = {
+							['>'] = function() return inv_amount > craft_item_mode[2] end,
+							['>='] = function() return inv_amount >= craft_item_mode[2] end,
+							['<'] = function() return inv_amount < craft_item_mode[2] end,
+							['<='] = function() return inv_amount <= craft_item_mode[2] end,
+						}
+						return t[craft_item_mode[1]] and t[craft_item_mode[1]]()
+					end
+
 					repeat
 						can_craft_at_all = true
 						empty_table(spent_items)
@@ -362,9 +419,16 @@ function add_craft_menu(recipe_table)
 							local can_craft = true
 							spent_items[i] = {}
 							for recipe_item, recipe_amount in pairs(r) do
-								spent_items[i][recipe_item] = {count_items(recipe_item), recipe_amount}
-								if spent_items[i][recipe_item][1] < recipe_amount then
-									can_craft = false
+								if craft_item_modes[recipe_item] then
+									spent_items[i][recipe_item] = {count_items(recipe_item), 1}
+									if not craft_item_mode_check(craft_item_modes[recipe_item], count_items(recipe_item)) then
+										can_craft = false
+									end
+								else
+									spent_items[i][recipe_item] = {count_items(recipe_item), recipe_amount}
+									if spent_items[i][recipe_item][1] < recipe_amount then
+										can_craft = false
+									end
 								end
 							end
 
@@ -384,7 +448,11 @@ function add_craft_menu(recipe_table)
 										end
 
 										if is_degradable(recipe_item, level.object_by_id(id)) then
-											utils_item.degrade(level.object_by_id(id), recipe_amount)
+											if craft_item_modes[recipe_item] then
+												alife_release_id(id)
+											else
+												utils_item.degrade(level.object_by_id(id), recipe_amount)
+											end
 										elseif amount < recipe_amount then
 											alife_release_id(id)
 										else
@@ -424,7 +492,7 @@ function add_craft_menu(recipe_table)
 									-- Print what is crafted and what items were consumed
 									local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(print_crafted_items()) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
 									for recipe_item, recipe_amount in pairs(r) do
-										tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount))
+										tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (craft_item_modes[recipe_item] and colorize("1") or (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount)))
 									end
 									print_tip(tip_string)
 									actor_effects.play_item_fx("item_combination")
@@ -444,7 +512,7 @@ function add_craft_menu(recipe_table)
 						-- Print what is crafted and what items were consumed
 						local tip_string = text_color .. gc(craft_func_key .. "_craft_success") .. " " .. colorize(print_crafted_items()) .. " \\n" .. gc(craft_func_key .. "_craft_spent_items")
 						for recipe_item, recipe_amount in pairs(wasted_items) do
-							tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount))
+							tip_string = tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " .. (craft_item_modes[recipe_item] and colorize("1") or (is_degradable(recipe_item) and colorize(round(recipe_amount * 100) .. "%") or colorize(recipe_amount)))
 						end
 						print_tip(tip_string)
 
@@ -459,30 +527,43 @@ function add_craft_menu(recipe_table)
 						for recipe_item, recipe_amount in pairs(v) do
 							failed_tip_string = failed_tip_string .. " \\n" .. ui_item.get_sec_name(recipe_item) .. ": " ..
 							(
-								recipe_amount[1] < recipe_amount[2] and
+								craft_item_modes[recipe_item] and
 								(
-									is_degradable(recipe_item)
-									and
-										colorize_bad(round(recipe_amount[1] * 100))
-									or 
-										colorize_bad(recipe_amount[1])
+									(
+										craft_item_mode_check(craft_item_modes[recipe_item], recipe_amount[1])
+										and
+											colorize(round(recipe_amount[1] * 100) .. "%")
+										or
+											colorize_bad(round(recipe_amount[1] * 100) .. "%")
+									) .. " " .. craft_item_modes[recipe_item][1] .. " " .. colorize(round(craft_item_modes[recipe_item][2] * 100) .. "%")
 								)
 								or
 								(
-									is_degradable(recipe_item)
-									and
-										colorize(round(recipe_amount[1] * 100))
+									recipe_amount[1] < recipe_amount[2] and
+									(
+										is_degradable(recipe_item)
+										and
+											colorize_bad(round(recipe_amount[1] * 100))
+										or 
+											colorize_bad(recipe_amount[1])
+									)
 									or
-										colorize(recipe_amount[1])
+									(
+										is_degradable(recipe_item)
+										and
+											colorize(round(recipe_amount[1] * 100))
+										or
+											colorize(recipe_amount[1])
+									)
 								)
-							)
-							.. "/" ..
-							(
-								is_degradable(recipe_item)
-								and
-									colorize(round(recipe_amount[2] * 100) .. "%")
-								or
-									colorize(recipe_amount[2])
+								.. "/" ..
+								(
+									is_degradable(recipe_item)
+									and
+										colorize(round(recipe_amount[2] * 100) .. "%")
+									or
+										colorize(recipe_amount[2])
+								)
 							)
 						end
 						if i ~= #spent_items then

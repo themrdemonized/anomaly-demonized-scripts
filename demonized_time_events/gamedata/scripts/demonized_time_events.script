@@ -1,6 +1,6 @@
 -- Optimized time events, using sorted arrays to peek only closest event to come
 -- Designed to fully reimplement existing timed events with all its quirks
--- Unlike vanilla time events, fires on actor_on_update and doesn't require any checks
+-- Unlike vanilla time events, doesn't require any checks
 -- Written by demonized
 
 local ev_queue = {}
@@ -19,7 +19,6 @@ local pairs = pairs
 local unpack = unpack
 
 local tg = 0
-local i = 1
 
 local function print_table(table, subs)
 	
@@ -66,7 +65,7 @@ local function print_table(table, subs)
 end
 
 local function queue_timer_compare(a, b)
-	return a.timer < b.timer
+	return a.timer > b.timer
 end
 
 -- http://lua-users.org/wiki/BinaryInsert
@@ -119,6 +118,7 @@ local function binary_insert(t, value, fcomp)
 end
 
 local function refresh_ev_queue()
+	printf("refreshing time events")
 	empty_table(computed_ev_queue)
 	-- tg = time_global()
 
@@ -151,9 +151,6 @@ end
 local function remove_ev_queue(ev_id, act_id)
 	local pos = find_ev_queue(ev_id, act_id)
 	if pos then
-		if pos <= i then
-			i = i - 1
-		end
 		return table_remove(computed_ev_queue, pos)
 	end
 end
@@ -214,9 +211,7 @@ function ProcessEventQueue(force)
 	-- end
 
 	local force_refresh
-	i = 1
-	local l = #computed_ev_queue
-	while i <= l do
+	for i = #computed_ev_queue, 1, -1 do
 		local t = computed_ev_queue[i] or (function()
 			force_refresh = true
 			return { timer = math_huge }
@@ -238,7 +233,6 @@ function ProcessEventQueue(force)
 				act_id = t.act_id
 			}
 		end
-		i = i + 1
 	end
 
 	if force_refresh then
@@ -261,5 +255,5 @@ local function process_queue()
 end
 
 function on_game_start()
-	RegisterScriptCallback("actor_on_update", process_queue)
+	AddUniqueCall(process_queue)
 end

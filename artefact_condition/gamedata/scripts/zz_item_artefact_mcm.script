@@ -3,7 +3,7 @@ op = {
     	{id = "banner", type = "slide", text = "ui_mcm_item_artefact_title", size = {512, 50}, spacing = 20},
         {id = "enable_condition_bar", type = "check", val = 1, def = true},
         {id = "divider", type = "line"},
-        {id = "enable_degraded_drops", type = "check", val = 1, def = true},
+        {id = "enable_degraded_drops", type = "check", val = 1, def = false},
         {id = "mutant_part_condition_min", type = "track", val = 2, min = 5, max = 100, step = 5, def = 50},
         {id = "mutant_part_condition_max", type = "track", val = 2, min = 5, max = 100, step = 5, def = 100},
     }

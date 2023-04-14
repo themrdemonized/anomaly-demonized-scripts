@@ -1,3 +1,14 @@
+local enable_debug = false
+local function printf(s, ...)
+    if enable_debug then
+        _G.printf("Artefact props: " .. s, ...)
+    end
+end
+
+local function printe(s, ...)
+    _G.printf("!Artefact props: " .. s, ...)
+end
+
 local in_actor_ruck = utils_item.in_actor_ruck
 local rad_factor = 0.5 -- multiplier to artefact rad effect in ruck
 local rad_tg_step = 300 --[ms]
@@ -16,145 +27,322 @@ local function load_defaults()
 end
 local settings = load_defaults()
 
--- Artefact condition enable
+local function throttle(func, tg_throttle)
+    local tg = 0
+    if not tg_throttle or tg_throttle == 0 then
+        return function(...)
+            local t = time_global()
+            if t ~= tg then
+                tg = t
+                return func(...)
+            end
+        end
+    else
+        return function(...)
+            local t = time_global()
+            if t < tg then return end
+            tg = t + tg_throttle
+            return func(...)
+        end
+    end
+end
+
+local gettersSetters = {
+    ["health_restore_speed"] = {"get_artefact_health", "set_artefact_health"},
+    ["radiation_restore_speed"] = {"get_artefact_radiation", "set_artefact_radiation"},
+    ["satiety_restore_speed"] = {"get_artefact_satiety", "set_artefact_satiety"},
+    ["power_restore_speed"] = {"get_artefact_power", "set_artefact_power"},
+    ["bleeding_restore_speed"] = {"get_artefact_bleeding", "set_artefact_bleeding"},
+    ["additional_inventory_weight"] = {"get_artefact_additional_inventory_weight", "set_artefact_additional_inventory_weight"},
+}
+
+AddScriptCallback("artefact_on_first_update")
+AddScriptCallback("artefact_on_update")
+AddScriptCallback("artefact_in_container")
+AddScriptCallback("artefact_out_container")
+
+function readValidMData(se_obj)
+    local id = se_obj.id
+    local name = se_obj:name()
+    local m_data = alife_storage_manager.get_se_obj_state(se_obj, true)
+
+    -- Invalidate old data if names are different
+    if m_data.name ~= name then
+        local m = alife_storage_manager.get_state()
+        m.game_object[id] = nil
+        m.se_object[id] = nil
+        m_data = alife_storage_manager.get_se_obj_state(se_obj, true)
+    end
+
+    m_data.state = m_data.state or {}
+    return m_data
+end
+
+function loadArtefactState(se_obj)
+    local id = se_obj.id
+    local name = se_obj:name()
+    local m_data = readValidMData(se_obj)
+    local obj = level.object_by_id(id)
+
+    if is_not_empty(m_data.state) then
+        if m_data.state.condition then
+            printf("%s: loaded condition %s", name, m_data.state.condition)
+            obj:set_condition(m_data.state.condition)
+        end
+
+        for k, v in pairs(gettersSetters) do
+            if obj[v[2]] and m_data.state[k] then
+                printf("%s: loaded %s %s", name, k, m_data.state[k])
+                obj[v[2]](obj, m_data.state[k])
+            end
+        end
+
+        if m_data.state.immunities and obj.set_artefact_immunity then
+            for k, v in pairs(HitTypeID) do
+                if m_data.state.immunities[k] then
+                    printf("%s: loaded immunity %s %s", name, k, m_data.state.immunities[k])
+                    obj:set_artefact_immunity(v, m_data.state.immunities[k])
+                end
+            end
+        end
+    end
+
+    return m_data
+end
+
+function saveArtefactState(se_obj, fromUpdate)
+    local id = se_obj.id
+    local name = se_obj:name()
+    local m_data = readValidMData(se_obj)
+    local obj = level.object_by_id(id)
+
+    m_data.state.condition = obj:condition()
+    if not fromUpdate then printf("%s: saved condition %s", name, m_data.state.condition) end
+
+    for k, v in pairs(gettersSetters) do
+        if obj[v[1]] then
+            m_data.state[k] = obj[v[1]](obj)
+            if not fromUpdate then printf("%s: saved %s %s", name, k, m_data.state[k]) end
+        end
+    end
+
+    m_data.state.immunities = {}
+    if obj.get_artefact_immunity then
+        for k, v in pairs(HitTypeID) do
+            m_data.state.immunities[k] = obj:get_artefact_immunity(v)
+            if not fromUpdate then printf("%s: saved immunity %s %s", name, k, m_data.state.immunities[k]) end
+        end
+    end
+
+    return m_data
+end
+
+function copyArtefactState(from_se_obj, to_se_obj, container)
+    local from_m_data = readValidMData(from_se_obj)
+    local to_m_data = readValidMData(to_se_obj)
+    to_m_data.state = dup_table(from_m_data.state)
+
+    -- if its container - invalidate radiation state, will be picked from the configs
+    if container then
+    	to_m_data.state.radiation_restore_speed = nil
+    end
+end
+
+-- Artefact properties and condition saving
+arty_spawn = item_artefact.artefact_binder.net_spawn
 item_artefact.artefact_binder.net_spawn = function(self, se_abstract)
-	if not object_binder.net_spawn(self, se_abstract) then
-		return false
-	end
-	db.add_obj(self.object)
-	local artefact = self.object:get_artefact()
-	local id = self.object:id()
-	if bind_anomaly_zone.artefact_ways_by_id[id] ~= nil then
-		local anomal_zone = bind_anomaly_zone.parent_zones_by_artefact_id[id]
-		local force_xz	= anomal_zone.applying_force_xz
-		local force_y	= anomal_zone.applying_force_y
-		artefact:FollowByPath(bind_anomaly_zone.artefact_ways_by_id[id],bind_anomaly_zone.artefact_points_by_id[id],vector():set(force_xz,force_y,force_xz))
---		artefact:FollowByPath(bind_anomaly_zone.artefact_ways_by_id[id],0,vector():set(force_xz,force_y,force_xz))
-	end
+    local res = arty_spawn(self, se_abstract)
+    if not res then return false end
 
-	self.first_call = true 
-	
-	local tg = time_global()
-	self._tmr_rad = tg
-	self._tmr_dgr = tg
-	return true
+    self.firstUpdateProperties = true
+    return res
 end
 
+item_artefact.artefact_binder.trySaveState = function(self, fromUpdate)
+    local se_obj = alife_object(self.object:id())
+    if se_obj then
+        saveArtefactState(se_obj, fromUpdate)
+    else
+        if not fromUpdate then printe("%s: can't save props, has no alife object", self.object:name()) end
+    end
+end
+
+item_artefact.artefact_binder.tryLoadState = function(self)
+    local se_obj = alife_object(self.object:id())
+    if se_obj then
+        loadArtefactState(se_obj)
+    else
+        printe("%s: can't load props, has no alife object", self.object:name())
+    end
+end
+
+item_artefact.artefact_binder.updateState = throttle(function(self)
+    self:trySaveState(true)
+end, 4000)
+
+arty_update = item_artefact.artefact_binder.update
 item_artefact.artefact_binder.update = function(self, delta)
-	object_binder.update(self, delta)
---	printf("pl:art [%s] pos %s", self.object:name(), vec_to_str(self.object:position()))
-	
-    if self.first_call == true then
-		local se_obj = alife_object(self.object:id())
-		if (se_obj) then
-			local m_data = alife_storage_manager.get_se_obj_state(se_obj, true)
-			if (m_data and m_data.offline_condition and m_data.name == self.object:name()) then
-				printf("loaded condition for %s "..tonumber(m_data.offline_condition), se_obj:section_name())
-				self.object:set_condition(tonumber(m_data.offline_condition) or 0.9999999)
-				--m_data.offline_condition = nil
-			end
-		end								  
-		local ini = self.object:spawn_ini()
-		if not (ini and ini:section_exist("fixed_bone")) then
-			self.first_call = false
-			return
-		end
-		local bone_name = ini:r_string_ex("fixed_bone", "name")
+    arty_update(self, delta)
+    if self.firstUpdateProperties then
+        self.firstUpdateProperties = false
 
-		local ph_shell = self.object:get_physics_shell()
-		if not ph_shell then
-			--printf("no ph shell")
-			return
-		end
-
-		local ph_element = ph_shell:get_element_by_bone_name(bone_name)
-
-		if ph_element:is_fixed() then
-			--printf("OBJECT FIXED")
-		else
-			--printf("FIXING OBJECT")
-			ph_element:fix()
-		end
-		
-		self.first_call = false
-
-
-    end	
-	
-		local obj = self.object
-		local cobj = obj:cast_Artefact()
-		if (not cobj) then
-			return
-		end
-		local tg = time_global()
-		local val = 0
-		
-		if (tg > self._tmr_rad) and (not self.no_rad) and in_actor_ruck(obj) then
-			self._tmr_rad = tg + rad_tg_step
-	
-		-- Get radiation restore speed
-		local rad_val = cobj.m_fRadiationRestoreSpeed or 0
-		
-		-- No process for artefacts with no / healing rad effect
-		if (self.no_rad == nil) then
-			self.no_rad = (rad_val <= 0)
-			if self.no_rad then
-				--print_dbg("Inventory radiation | artefact [%s] is not harmful -> exclude!", obj:name())
-				return
-			end
-		end
-
-		-- Apply radiation on actor
-		local rad_delta = rad_val * rad_factor
-		db.actor:change_radiation(rad_delta)
-		
-		--print_dbg("Inventory radiation | artefact: %s - radiation effect: %s", obj:name(), rad_delta)
-		end
+        self:tryLoadState()
+        SendScriptCallback("artefact_on_first_update", self.object, self)
+    end
+    SendScriptCallback("artefact_on_update", self.object, self)
+    self:updateState()
 end
 
-item_artefact.artefact_binder.net_destroy = function(self, se_abstract)
-	db.del_obj(self.object)
-	object_binder.net_destroy(self)
-end
+-- Can't save on net destroy - no game object exists by that time
+-- arty_destroy = item_artefact.artefact_binder.net_destroy
+-- item_artefact.artefact_binder.net_destroy = function(self, se_abstract)
+--     self:trySaveState()
+--     arty_destroy(self, se_abstract)
+-- end
 
+arty_load = item_artefact.artefact_binder.load
 item_artefact.artefact_binder.load = function(self, stpk)
-	object_binder.load(self,stpk)
+    if arty_load then arty_load(self, stpk) else object_binder.load(self,stpk) end
 end
 
+arty_save = item_artefact.artefact_binder.save
 item_artefact.artefact_binder.save = function(self, stpk)
-	object_binder.save(self,stpk)
-	local se_obj = alife_object(self.object:id())
-	if (se_obj) then
-		local m_data = alife_storage_manager.get_se_obj_state(se_obj, true)
-		if (m_data) then 
-			m_data.offline_condition = self.object:condition()
-			printf("saved condition for %s "..tonumber(m_data.offline_condition), se_obj:section_name())
-		end
-	end
+    self:trySaveState()
+    if arty_save then arty_save(self, stpk) else object_binder.save(self,stpk) end
 end
 
 se_artefact.se_artefact.on_register = function(self)
     cse_alife_item_artefact.on_register(self)
+
     -- Проверяем кастомдату обьекта на наличие стори айди.
     story_objects.check_spawn_ini_for_story_id(self)
-    
-    -- persistent storage
-    printf("adding %s, %s to se_obj state", self.id, self:name())
-    alife_storage_manager.get_se_obj_state(self,true)
-
     SendScriptCallback("server_entity_on_register",self,"se_artefact")
 end
 
 se_artefact.se_artefact.on_unregister = function(self)
-    local m_data = alife_storage_manager.get_state()
-    if (m_data.se_object and m_data.se_object[self.id]) then
-    	printf("clearing object %s, %s from m_data", self.id, self:name())
-        m_data.se_object[self.id] = nil
-    end
     unregister_story_object_by_id(self.id)
-
     SendScriptCallback("server_entity_on_unregister",self,"se_artefact")
     cse_alife_item_artefact.on_unregister(self)
+end
+
+dropdrop_ArtyContainer = itms_manager.dropdrop_ArtyContainer
+itms_manager.dropdrop_ArtyContainer = function(obj_1, obj_2, sec_1, sec_2) -- Put artefact in container
+    local cont = sec_2
+    local arty = sec_1
+    if ini_sys:section_exist(arty .. "_" .. cont) then
+        local cond = obj_1 and obj_1:condition()
+    
+        actor_effects.play_item_fx("container_tool_" .. cont .. "_dummy")
+            
+        local seObj = alife_create_item(arty .. "_" .. cont, db.actor, { cond = cond } )
+        local prevSeObj = alife_object(obj_1:id())
+
+        if seObj and prevSeObj then
+            copyArtefactState(prevSeObj, seObj, true)
+        else
+            printe("can't copy state, alife object from %s - %s, alife object to %s - %s", obj_1:name(), not not prevSeObj, seObj and seObj:name(), not not seObj)
+        end
+
+        SendScriptCallback("artefact_in_container", seObj, obj_1, obj_2)
+
+        alife_release(obj_1)
+        alife_release(obj_2)
+    end
+end
+
+use_arty_container = itms_manager.use_arty_container
+itms_manager.use_arty_container = function(obj)
+    local break_con
+    local break_arty
+    local sec = obj:section()
+    
+    if (string.find(sec, "(lead.-_box)",3)) then
+        break_con = "lead_box"
+        break_arty = sec:gsub("_lead_box", "")      
+    elseif (string.find(sec, "(af.-_iam)",3)) then
+        break_con = "af_iam"
+        break_arty = sec:gsub("_af_iam", "")
+    elseif (string.find(sec, "(af.-_aac)",3)) then
+        break_con = "af_aac"
+        break_arty = sec:gsub("_af_aac", "")
+    elseif (string.find(sec, "(af.-_aam)",3)) then
+        break_con = "af_aam"
+        break_arty = sec:gsub("_af_aam", "")
+    end
+    
+    if break_con and break_arty and ini_sys:section_exist(break_con) and ini_sys:section_exist(break_arty) then
+        local cond = obj:condition()
+        
+        _G.ARTY_FROM_CONT = true -- Hack to prevent player from exploting Artefacts Containers (gaining rank by recieving artefacts)
+        
+        actor_effects.play_item_fx(break_con .. "_dummy")
+        local seCont = alife_create_item(break_con, db.actor)
+        local seObj = alife_create_item(break_arty, db.actor, { cond = cond } )
+        local prevSeObj = alife_object(obj:id())
+
+        if seObj and prevSeObj then
+            copyArtefactState(prevSeObj, seObj, true)
+        else
+            printe("can't copy state, alife object from %s - %s, alife object to %s - %s", obj:name(), not not prevSeObj, seObj and seObj:name(), not not seObj)
+        end
+
+        SendScriptCallback("artefact_out_container", seObj, seCont, obj)
+
+        alife_release(obj)
+    end
+end
+
+-- Displaying properties
+function get_artefact_prop(obj, sec, prop)
+    if IsArtefact(obj) and obj[prop] then
+        return obj[prop](obj)
+    end
+end
+
+function get_artefact_immunity(obj, sec, immunity)
+    if IsArtefact(obj) and obj.get_artefact_immunity and immunity then
+        return obj:get_artefact_immunity(immunity)
+    end
+end
+
+local stats = utils_ui.prepare_stats_table
+local stats_table = utils_ui.stats_table
+utils_ui.prepare_stats_table = function()    
+    stats()
+
+    local scriptName = "zz_item_artefact"
+
+    stats_table["artefact"]["additional_inventory_weight"] = {
+        index = 16,
+        typ = "float",
+        name = "ui_inv_outfit_additional_weight",
+        icon_p = "ui_am_propery_08",
+        icon_n = "ui_am_prop_carry_weight_negative",
+        track = false,
+        magnitude = 1000,
+        unit = "st_g",
+        condition = true,
+        compare = false,
+        sign = true,
+        show_always = false,
+        section = nil,
+        value_functor = { scriptName, "get_artefact_prop", "get_artefact_additional_inventory_weight" }
+    }
+    stats_table["artefact"]["health_restore_speed"]["value_functor"] = { scriptName, "get_artefact_prop", "get_artefact_health" }
+    stats_table["artefact"]["radiation_restore_speed"]["value_functor"] = { scriptName, "get_artefact_prop", "get_artefact_radiation" }
+    stats_table["artefact"]["satiety_restore_speed"]["value_functor"] = { scriptName, "get_artefact_prop", "get_artefact_satiety" }
+    stats_table["artefact"]["power_restore_speed"]["value_functor"] = { scriptName, "get_artefact_prop", "get_artefact_power" }
+    stats_table["artefact"]["bleeding_restore_speed"]["value_functor"] = { scriptName, "get_artefact_prop", "get_artefact_bleeding" }
+
+    stats_table["artefact"]["burn_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 0 }
+    stats_table["artefact"]["shock_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 1 }
+    stats_table["artefact"]["radiation_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 3 }
+    stats_table["artefact"]["telepatic_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 4 }
+    stats_table["artefact"]["chemical_burn_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 2 }
+    stats_table["artefact"]["wound_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 5 }
+    stats_table["artefact"]["fire_wound_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 6 }
+    stats_table["artefact"]["explosion_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 8 }
+    stats_table["artefact"]["strike_immunity"]["value_functor"] = { scriptName, "get_artefact_immunity", 7 }
 end
 
 local is_degradable = utils_item.is_degradable
@@ -180,15 +368,6 @@ end
 
 utils_item.is_degradable = function(obj, sec)
     return is_degradable(obj, sec) or (settings.enable_degraded_drops and is_art_degradable(obj, sec))
-end
-
-local stats = utils_ui.prepare_stats_table
-local stats_table = utils_ui.stats_table
-utils_ui.prepare_stats_table = function()
-    if is_not_empty(stats_table) then return end
-    
-    stats()
-    stats_table["artefact"]["additional_inventory_weight"] = { index= 16, typ= "float",   name= "ui_inv_outfit_additional_weight",        icon_p= "ui_am_propery_08",                 icon_n= "ui_am_prop_carry_weight_negative", track= false, magnitude= 1000, unit = "st_g",    condition= true, compare= false, sign= true, show_always= false, section= nil }
 end
 
 -- Adding condtition bars

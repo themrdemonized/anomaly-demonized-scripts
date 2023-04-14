@@ -1,0 +1,106 @@
+-- Library of generated colliders that could be collision-tested 
+local function HPBtoXYZ(v)
+	return vector():setHP(v.x, v.y):normalize()
+end
+
+local function getRay(dist, ignoreObject)
+	return demonized_geometry_ray.geometry_ray({
+		ray_range = dist,
+		flags = 3,
+		ignore_object = ignoreObject,
+	})
+end
+
+-- Interface for collider classes, dont instantiate it directly, use ones below
+class "ICollider"
+function ICollider:__init(center, size, detail, collisionThreshold, ignoreObject)
+	self.center = center or device().cam_pos
+	self.detail = math.max(math.floor(detail or 2), 2) 
+	self.collisionThreshold = collisionThreshold or 0
+	self.size = size or 1
+	self.ignoreObject = ignoreObject
+	self.rayTable = {}
+end
+
+function ICollider:setCenter(center)
+	self.center = center
+end
+
+function ICollider:test(visualize)
+	local points = 0
+	for i = 1, #self.rayTable do
+		local ray = getRay(self.size, self.ignoreObject)
+		local res = ray:get(self.center, self.rayTable[i])
+		if visualize then
+			demonized_geometry_ray.VisualizeRay(self.center, vector():set(self.center):mad(self.rayTable[i], res.success and res.distance - 0.3 or res.distance), 1, 495)
+		end
+		if res.success then
+			points = points + 1
+		end
+	end
+	return points / #self.rayTable > self.collisionThreshold
+end
+
+class "SphereCollider" (ICollider)
+function SphereCollider:__init(center, size, detail, collisionThreshold, ignoreObject)
+	super(center, size, detail, collisionThreshold, ignoreObject)
+
+	local ray_table = self.rayTable
+	ray_table[#ray_table + 1] = vector():set(0,1,0)
+	ray_table[#ray_table + 1] = vector():set(0,-1,0)
+	local rot_angle_step = 90 / detail
+	for angle = 0, 360, rot_angle_step do
+		angle = utils_data.deg2rad(angle)
+		local HPBHor = vector():set(angle, 0, 0)
+		local dirHor = HPBtoXYZ(HPBHor)
+		ray_table[#ray_table + 1] = dirHor
+		for angleVert = 0, 90, rot_angle_step do
+			if angleVert % 90 ~= 0 then
+				angleVert = utils_data.deg2rad(angleVert)
+				local HPBVert = vector():set(angle, angleVert, 0)
+				local dirVert = HPBtoXYZ(HPBVert)
+				ray_table[#ray_table + 1] = dirVert
+				local HPBVert = vector():set(angle, -angleVert, 0)
+				local dirVert = HPBtoXYZ(HPBVert)
+				ray_table[#ray_table + 1] = dirVert
+			end
+		end
+	end
+end
+
+class "HemisphereCollider" (ICollider)
+function HemisphereCollider:__init(center, size, detail, collisionThreshold, ignoreObject)
+	super(center, size, detail, collisionThreshold, ignoreObject)
+
+	local ray_table = self.rayTable
+	ray_table[#ray_table + 1] = vector():set(0,1,0)
+	local rot_angle_step = 90 / detail
+	for angle = 0, 360, rot_angle_step do
+		angle = utils_data.deg2rad(angle)
+		local HPBHor = vector():set(angle, 0, 0)
+		local dirHor = HPBtoXYZ(HPBHor)
+		ray_table[#ray_table + 1] = dirHor
+		for angleVert = 0, 90, rot_angle_step do
+			if angleVert % 90 ~= 0 then
+				angleVert = utils_data.deg2rad(angleVert)
+				local HPBVert = vector():set(angle, angleVert, 0)
+				local dirVert = HPBtoXYZ(HPBVert)
+				ray_table[#ray_table + 1] = dirVert
+			end
+		end
+	end
+end
+
+testDetail = 4
+testSize = 1
+local tg = 0
+function test()
+	if time_global() > tg then
+		tg = time_global() + 500
+		HemisphereCollider(device().cam_pos, testSize, testDetail, 0, db.actor):test()
+	end
+end
+
+function on_game_start()
+	-- RegisterScriptCallback("actor_on_update", test)
+end

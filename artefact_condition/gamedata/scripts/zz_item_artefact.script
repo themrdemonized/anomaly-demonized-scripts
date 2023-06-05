@@ -56,10 +56,12 @@ local gettersSetters = {
     ["additional_inventory_weight"] = {"get_artefact_additional_inventory_weight", "set_artefact_additional_inventory_weight"},
 }
 
-AddScriptCallback("artefact_on_first_update")
-AddScriptCallback("artefact_on_update")
-AddScriptCallback("artefact_in_container")
-AddScriptCallback("artefact_out_container")
+if AddScriptCallback then
+    AddScriptCallback("artefact_on_first_update")
+    AddScriptCallback("artefact_on_update")
+    AddScriptCallback("artefact_in_container")
+    AddScriptCallback("artefact_out_container")
+end
 
 function readValidMData(se_obj)
     local id = se_obj.id
@@ -187,9 +189,9 @@ item_artefact.artefact_binder.update = function(self, delta)
         self.firstUpdateProperties = false
 
         self:tryLoadState()
-        SendScriptCallback("artefact_on_first_update", self.object, self)
+        if AddScriptCallback then SendScriptCallback("artefact_on_first_update", self.object, self) end
     end
-    SendScriptCallback("artefact_on_update", self.object, self)
+    if AddScriptCallback then SendScriptCallback("artefact_on_update", self.object, self) end
     self:updateState()
 end
 
@@ -243,7 +245,7 @@ itms_manager.dropdrop_ArtyContainer = function(obj_1, obj_2, sec_1, sec_2) -- Pu
             printe("can't copy state, alife object from %s - %s, alife object to %s - %s", obj_1:name(), not not prevSeObj, seObj and seObj:name(), not not seObj)
         end
 
-        SendScriptCallback("artefact_in_container", seObj, obj_1, obj_2)
+        if AddScriptCallback then SendScriptCallback("artefact_in_container", seObj, obj_1, obj_2) end
 
         alife_release(obj_1)
         alife_release(obj_2)
@@ -286,7 +288,7 @@ itms_manager.use_arty_container = function(obj)
             printe("can't copy state, alife object from %s - %s, alife object to %s - %s", obj:name(), not not prevSeObj, seObj and seObj:name(), not not seObj)
         end
 
-        SendScriptCallback("artefact_out_container", seObj, seCont, obj)
+        if AddScriptCallback then SendScriptCallback("artefact_out_container", seObj, seCont, obj) end
 
         alife_release(obj)
     end

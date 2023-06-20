@@ -54,10 +54,12 @@ function save_current_weapon()
 	local wpn = db.actor:active_item()
 	if not wpn then return end
 
+	local c_obj = wpn:cast_Weapon()
+	if not c_obj then return end
+
 	local id = wpn:id()
 	if not saved_weapons[id] then
 		saved_weapons[id] = {}
-		local c_obj = wpn:cast_Weapon()
 		for set, get in pairs(available_modifiers) do
 			saved_weapons[id][set] = c_obj[get](c_obj)
 			saved_weapons[id][get] = saved_weapons[id][set]
@@ -77,11 +79,17 @@ function weapon_callbacks_on_hud_animation_play(anm_table, obj)
 	end
 end
 
-function weapon_callbacks_on_weapon_before_fire(flags)
-	save_current_weapon()
-
+function weapon_callbacks_on_weapon_before_fire()
 	local wpn = db.actor:active_item()
+	if not wpn then return end
+	
+	-- save_current_weapon()
+
 	local id = wpn:id()
+	if not saved_weapons[id] then
+		return
+	end
+
 	local c_obj = wpn:cast_Weapon()
 	assert(c_obj.RealRPM, "Can't modify weapon stats, Modded Exes requied")
 
@@ -95,18 +103,9 @@ function weapon_callbacks_on_weapon_before_fire(flags)
 	end
 
 	for set, coeff in pairs(coeffs) do
-		printf("setting modifier for %s: %s - %s", wpn:name(), set, coeff)
+		-- printf("setting modifier for %s: %s - %s", wpn:name(), set, coeff)
 		c_obj[set](c_obj, saved_weapons[id][set] * coeff)
 	end
-
-	CreateTimeEvent("weapon_modifier_next_tick_reset", 0, 0, function()
-		weapon_callbacks_weapon_fired = false
-		return true
-	end)
-end
-
-function weapon_callbacks_on_weapon_fired(obj, wpn, ammo_elapsed, grenade_elapsed, ammo_type, grenade_type)
-	weapon_callbacks_weapon_fired = true
 end
 
 function weapon_callbacks_actor_on_update()
@@ -124,21 +123,10 @@ function weapon_callbacks_actor_on_update()
 			end
 		end
 	end
-end
-
--- Ensure to run our funcs last
--- Called upon weapon fire keybind, weapons can be stopped from firing if returns false
-CActor_Fire = _G.CActor_Fire
-_G.CActor_Fire = function()
-	local res = CActor_Fire()
-	if res then
-		weapon_callbacks_on_weapon_before_fire()
-	end
-	return res
+	weapon_callbacks_on_weapon_before_fire()
 end
 
 function on_game_start()
-	RegisterScriptCallback("actor_on_weapon_fired", weapon_callbacks_on_weapon_fired)
 	RegisterScriptCallback("actor_on_hud_animation_play", weapon_callbacks_on_hud_animation_play)
 	RegisterScriptCallback("actor_on_update", weapon_callbacks_actor_on_update)
 end

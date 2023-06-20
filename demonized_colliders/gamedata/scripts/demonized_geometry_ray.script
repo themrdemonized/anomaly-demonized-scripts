@@ -112,6 +112,7 @@ function geometry_ray:__init(args)
     self.ray:set_flags(args.flags or 2)
     self.ray:set_range(self.ray_range)
     self.visualize = args.visualize
+    self.visualize_end_pos_only = args.visualize_end_pos_only
     if args.ignore_object then
         self.ray:set_ignore_object(args.ignore_object)
     end
@@ -139,7 +140,7 @@ function geometry_ray:get(position, direction)
     if self.visualize then
         local init_pos = vector():set(position)
         local end_pos = vector():mad(init_pos, direction, distance)
-        VisualizeRay(init_pos, end_pos)
+        VisualizeRay(init_pos, end_pos, nil, nil, nil, self.visualize_end_pos_only)
     end
     result.in_contact = distance <= self.contact_range
     result.position = position:add(direction:mul(distance + self.distance_offset))
@@ -233,7 +234,7 @@ end
 
 -- Visualize ray from one point to other with particles playing at setted step
 class "VisualizeRay"
-function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, force_stop)
+function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, force_stop, draw_end_only)
     self.init_pos = init_pos
     self.end_pos = end_pos
     self.visualize_time = visualize_time or 3000
@@ -241,9 +242,11 @@ function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, f
     self.force_stop = force_stop
     self.force_stop_default = force_stop
     self.time = 0
+    self.draw_end_only = draw_end_only
 
     self.start = function()
-        for i = 0, 1, self.particle_step do
+        local begin = self.draw_end_only and 1 or 0
+        for i = begin, 1, self.particle_step do
             local p = particles_object("amik\\hit_fx\\metal\\hit_sparks_glow")
             local x = lerp(self.init_pos.x, self.end_pos.x, i)
             local y = lerp(self.init_pos.y, self.end_pos.y, i)
@@ -294,16 +297,28 @@ function get_surface_normal(pos, dir)
     local ray = geometry_ray({
         ray_range = 1000,
         visualize = false,
-        flags = 3,
+        flags = 1+2,
+        ignore_object = db.actor,
     })
 
     -- Get player's camera position and direction in world space
     local pos0 = pos and vector():set(pos) or device().cam_pos
-    local pos01 = vector():set(pos0):add(vector():set(0, 0.01, 0))
-    local pos02 = vector():set(pos0):add(vector():set(0.01, 0, 0))
     local angle1 = dir and vector():set(dir) or device().cam_dir
 
-    -- Get positions of intersections of rays angled above and to the left of pos1
+    -- Generate two positions orthogonal to camera direction and each other
+    local pos01 = vector():set(0, 1, 0)
+    pos01 = pos01:sub(vector():set(angle1):mul(pos01:dotproduct(angle1)))
+    pos01:normalize()
+
+    local pos02 = vector_cross(angle1, pos01)
+
+    pos01 = pos01:mul(0.01)
+    pos02 = pos02:mul(0.01)
+
+    pos01 = pos01:add(pos0)
+    pos02 = pos02:add(pos0)
+
+    -- Get positions of intersections of rays around pos0
     local res = ray:get(pos0, angle1)
     local pos1 = res.position
     local pos2 = ray:get(pos01, angle1).position

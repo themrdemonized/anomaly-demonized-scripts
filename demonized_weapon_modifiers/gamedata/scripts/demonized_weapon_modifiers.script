@@ -61,6 +61,7 @@ function save_current_weapon()
 	if not saved_weapons[id] then
 		saved_weapons[id] = {}
 		for set, get in pairs(available_modifiers) do
+			assert(c_obj[get] and c_obj[set], ("Can't modify weapon stats, get %s, set %s, reinstall Modded Exes"):format(get, set))
 			saved_weapons[id][set] = c_obj[get](c_obj)
 			saved_weapons[id][get] = saved_weapons[id][set]
 		end
@@ -91,7 +92,9 @@ function weapon_callbacks_on_weapon_before_fire()
 	end
 
 	local c_obj = wpn:cast_Weapon()
-	assert(c_obj.RealRPM, "Can't modify weapon stats, Modded Exes requied")
+	if not c_obj then
+		return
+	end
 
 	local coeffs = {}
 	for k, v in pairs(modifiers) do
@@ -110,19 +113,24 @@ end
 
 function weapon_callbacks_actor_on_update()
 	save_current_weapon()
+
+	-- Iterate and restore old weapons to old values
 	for id, v in pairs(saved_weapons) do
 		local obj = level.object_by_id(id)
 		if obj then
 			local p = obj:parent()
 			if not (p and p:id() == AC_ID) then
 				local c_obj = obj:cast_Weapon()
-				for set, val in pairs(v) do
-					c_obj[set](c_obj, val)
+				if c_obj then
+					for set, val in pairs(v) do
+						c_obj[set](c_obj, val)
+					end
 				end
 				saved_weapons[id] = nil
 			end
 		end
 	end
+
 	weapon_callbacks_on_weapon_before_fire()
 end
 

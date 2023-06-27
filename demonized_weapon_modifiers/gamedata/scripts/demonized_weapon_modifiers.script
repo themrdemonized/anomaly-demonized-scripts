@@ -138,3 +138,4 @@ function on_game_start()
 	RegisterScriptCallback("actor_on_hud_animation_play", weapon_callbacks_on_hud_animation_play)
 	RegisterScriptCallback("actor_on_update", weapon_callbacks_actor_on_update)
 end
+

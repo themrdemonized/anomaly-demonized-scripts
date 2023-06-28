@@ -102,7 +102,7 @@ function readValidMData(se_obj)
     return m_data
 end
 
-function saveArtefactConfig(se_obj)
+function saveArtefactConfig(se_obj, fromUpdate)
     local m_data = readValidMData(se_obj)
     local sec = se_obj:section_name()
     local absorb_sec = SYS_GetParam(0, sec, "hit_absorbation_sect", sec)
@@ -110,9 +110,11 @@ function saveArtefactConfig(se_obj)
     m_data.state.config = m_data.state.config or {}
     for k, v in pairs(artefactConfigParams) do
         m_data.state.config[k] = SYS_GetParam(2, sec, k, 0)
+        if not fromUpdate then printf("%s: saved config value %s %s", se_obj:name(), k, m_data.state.config[k]) end
     end
     for k, v in pairs(artefactAbsorbConfigParams) do
         m_data.state.config[k] = SYS_GetParam(2, absorb_sec, k, 0)
+        if not fromUpdate then printf("%s: saved config value %s %s", se_obj:name(), k, m_data.state.config[k]) end
     end
 end
 
@@ -200,7 +202,7 @@ function saveArtefactState(se_obj, fromUpdate)
         end
     end
 
-    saveArtefactConfig(se_obj)
+    saveArtefactConfig(se_obj, fromUpdate)
 
     return m_data
 end

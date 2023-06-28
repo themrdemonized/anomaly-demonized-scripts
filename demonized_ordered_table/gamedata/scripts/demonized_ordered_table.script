@@ -1,0 +1,97 @@
+-- Lua 5.1 patch for overriding pairs and ipairs from metatable
+local _p = pairs
+local pairs = function(t, ...)
+    local m = getmetatable(t)
+    if not m then return _p(t, ...) end
+    if not m.__pairs then return _p(t, ...) end
+    return m.__pairs(t, ...)
+end
+
+local _ip = ipairs
+local ipairs = function(t, ...)
+    local m = getmetatable(t)
+    if not m then return _ip(t, ...) end
+    if not m.__ipairs then return _ip(t, ...) end
+    return m.__ipairs(t, ...)
+end
+
+-- Ordered table
+-- Table keys will be iterated in the order of insertion
+function orderedTable(t)
+    local m = {}
+    m.__proxy = {}
+    m.__korder = {}
+    m.__delKey = function(self, k)
+        for i = 1, #m.__korder do
+            if m.__korder[i] == k then
+                return table.remove(m.__korder, i)
+            end
+        end
+    end
+
+    m.__addKey = function(self, k)
+        m.__korder[#m.__korder + 1] = k 
+    end
+
+    m.__index = m.__proxy
+    
+    m.__newindex = function(self, k, v)
+        if m.__proxy[k] then
+            if v == nil then
+                m:__delKey(k)
+            end
+        else
+            m:__addKey(k)
+        end
+        m.__proxy[k] = v
+    end
+    
+    m.__pairs = function(self)
+        local i = 0
+        return function()
+            i = i + 1
+            local k = m.__korder[i]
+            local v = m.__proxy[k]
+            if v then
+                return k, v
+            end
+        end
+    end
+
+    m.__ipairs = function(self)
+        local i = 0
+        return function()
+            i = i + 1
+            local v = m.__proxy[i]
+            if v then
+                return i, v
+            end
+        end
+    end
+
+    local res = setmetatable({}, m)
+
+    -- Convert table to orderedTable
+    if is_not_empty(t) then
+        for k, v in pairs(t) do
+            res[k] = v
+        end
+    end
+    
+    return res
+end
+
+--[[
+Usage:
+    local t = orderedTable()
+    t.a = 32
+    t.b = 64
+    t.c = 96
+    for k, v in pairs(t) do
+        printf("%s, %s", k, v)
+    end
+    t.a = nil
+    for k, v in pairs(t) do
+        printf("%s, %s", k, v)
+    end
+]]

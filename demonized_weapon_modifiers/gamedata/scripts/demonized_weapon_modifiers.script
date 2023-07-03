@@ -116,7 +116,7 @@ function weapon_callbacks_actor_on_update()
 
 	-- Iterate and restore old weapons to old values
 	for id, v in pairs(saved_weapons) do
-		local obj = level.object_by_id(id)
+		local obj = get_object_by_id(id)
 		if obj then
 			local p = obj:parent()
 			if not (p and p:id() == AC_ID) then

@@ -1,4 +1,4 @@
-local enable_debug = false
+local enable_debug = true
 local function printf(s, ...)
     if enable_debug then
         _G.printf("Artefact props: " .. s, ...)
@@ -250,13 +250,25 @@ item_artefact.artefact_binder.updateState = throttle(function(self)
     self:trySaveState(true)
 end, 4000)
 
+item_artefact.artefact_binder.printUpdateErrorThrottled = throttle(function(self)
+    printe("%s: can't update props, has no alife object", self.object:name())
+end, 2000)
+
 arty_update = item_artefact.artefact_binder.update
 item_artefact.artefact_binder.update = function(self, delta)
     arty_update(self, delta)
+
+    -- Do nothing if server object is unavailable
+    local se_obj = alife_object(self.object:id())
+    if not se_obj then
+        self:printUpdateErrorThrottled()
+        return
+    end
+
     if self.firstUpdateProperties then
         self.firstUpdateProperties = false
 
-        local configChanged = hasArtefactConfigChanged(alife_object(self.object:id()))
+        local configChanged = hasArtefactConfigChanged(se_obj)
         if configChanged then
             -- Do nothing since config is changed
         else

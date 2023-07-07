@@ -1,5 +1,19 @@
 -- !!! MODDED EXES 1.5.2 IS REQUIRED !!!
 
+local function get_object_by_id(id)	
+	if (id == AC_ID) then
+		return db.actor
+	end
+	
+	local obj = db.storage[id] and db.storage[id].object or level.object_by_id(id)
+	if (not obj) then
+		callstack()
+		printe("!ERROR get_object_by_id | no game object recieved from id (%s)", id)
+		return
+	end
+	return obj
+end
+
 local saved_weapons = {}
 local weapon_callbacks_weapon_fired = false
 
@@ -128,6 +142,8 @@ function weapon_callbacks_actor_on_update()
 				end
 				saved_weapons[id] = nil
 			end
+		else
+			saved_weapons[id] = nil
 		end
 	end
 

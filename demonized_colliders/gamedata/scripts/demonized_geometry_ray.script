@@ -234,7 +234,8 @@ end
 
 -- Visualize ray from one point to other with particles playing at setted step
 class "VisualizeRay"
-function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, force_stop, draw_end_only)
+local lineId = 70000
+function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, force_stop, draw_end_only, color)
     self.init_pos = init_pos
     self.end_pos = end_pos
     self.visualize_time = visualize_time or 3000
@@ -243,36 +244,21 @@ function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, f
     self.force_stop_default = force_stop
     self.time = 0
     self.draw_end_only = draw_end_only
+    self.color = color or fcolor():set(0,1,0,1)
 
     self.start = function()
-        local begin = self.draw_end_only and 1 or 0
-        for i = begin, 1, self.particle_step do
-            local p = particles_object("amik\\hit_fx\\metal\\hit_sparks_glow")
-            local x = lerp(self.init_pos.x, self.end_pos.x, i)
-            local y = lerp(self.init_pos.y, self.end_pos.y, i)
-            local z = lerp(self.init_pos.z, self.end_pos.z, i)
-            p:play_at_pos(vector():set(x, y, z))
-            local time = 0
-            local stopped = false
-            AddUniqueCall(throttle(function()
-                if self.time > self.visualize_time then
-                    if not stopped then
-                        if self.force_stop then p:stop() else p:stop_deffered() end
-                        stopped = true
-                    end
-                    if not p:playing() then
-                        p = nil
-                        return true
-                    end
-                else
-                    if not p:playing() then
-                        p:play_at_pos(vector():set(x, y, z))
-                    end
-                    time = time + device().time_delta
-                    self.time = time
-                end
-            end))
-        end
+        lineId = lineId + 1
+        local id = lineId
+        local line = debug_render.add_object(id, DBG_ScriptObject.line):cast_dbg_line()
+        line.point_a = init_pos
+        line.point_b = end_pos
+        line.visible = true
+        line.color = self.color
+        CreateTimeEvent("geometry_ray_stop", id, self.visualize_time / 1000, function()
+            debug_render.remove_object(id)
+            lineId = lineId - 1
+            return true
+        end)
     end
     self.start()
 
@@ -292,12 +278,44 @@ function VisualizeRay:__init(init_pos, end_pos, particle_step, visualize_time, f
     end
 end
 
+local EPS = 0.0000100
+local function fsimilar(value, to, eps)
+    return math.abs(value - to) < eps
+end
+
+local function generate_orthonormal_basis_normalized(d)
+    local dir = vector():set(d):normalize()
+    local up = vector():set(0,0,0)
+    local right = vector():set(0,0,0)
+    local fInvLength
+    if (fsimilar(dir.y, 1.0, EPS)) then
+        up:set(0, 0, 1)
+        fInvLength = 1 / math.sqrt(dir.x * dir.x + dir.y * dir.y)
+        right.x = -dir.y * fInvLength
+        right.y = dir.x * fInvLength
+        right.z = 0
+        up.x = -dir.z * right.y
+        up.y = dir.z * right.x
+        up.z = dir.x * right.y - dir.y * right.x
+    else
+        up:set(0, 1, 0)
+        fInvLength = 1 / math.sqrt(dir.x * dir.x + dir.z * dir.z)
+        right.x = dir.z * fInvLength
+        right.y = 0
+        right.z = -dir.x * fInvLength
+        up.x = dir.y * right.z
+        up.y = dir.z * right.x - dir.x * right.z
+        up.z = -dir.y * right.x
+    end
+    return dir, up, right
+end
+
 -- Get surface normals by Aoldri, edited by demonized
-function get_surface_normal(pos, dir)
+function get_surface_normal(pos, dir, ray_props, visualize_props)
     local ray = geometry_ray({
-        ray_range = 1000,
-        visualize = false,
-        flags = 1+2,
+        ray_range = ray_props and ray_props.ray_range or 1000,
+        visualize = ray_props and ray_props.visualize,
+        flags = ray_props and ray_props.flags or (1+2),
         ignore_object = db.actor,
     })
 
@@ -306,12 +324,7 @@ function get_surface_normal(pos, dir)
     local angle1 = dir and vector():set(dir) or device().cam_dir
 
     -- Generate two positions orthogonal to camera direction and each other
-    local pos01 = vector():set(0, 1, 0)
-    pos01 = pos01:sub(vector():set(angle1):mul(pos01:dotproduct(angle1)))
-    pos01:normalize()
-
-    local pos02 = vector_cross(angle1, pos01)
-
+    local angle1, pos01, pos02 = generate_orthonormal_basis_normalized(angle1)
     pos01 = pos01:mul(0.01)
     pos02 = pos02:mul(0.01)
 
@@ -346,6 +359,14 @@ function get_surface_normal(pos, dir)
         cross:invert()
     end
 
-    -- VisualizeRay(pos1, vector():set(pos1):add(cross), nil, 300)
+    cross.x = clamp(cross.x, -1, 1)
+    cross.y = clamp(cross.y, -1, 1)
+    cross.z = clamp(cross.z, -1, 1)
+
+    if visualize_props then
+        local time = visualize_props.visualize_time or 300
+        local color = visualize_props.color or fcolor():set(0,1,0,1)
+        VisualizeRay(pos1, vector():set(pos1):add(cross), nil, time, nil, nil, color)
+    end
     return cross
 end

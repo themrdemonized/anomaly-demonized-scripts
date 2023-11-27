@@ -42,6 +42,10 @@ local function update_weights()
     local actor = db.actor
     actor:set_actor_max_weight(result_weight)
     actor:set_actor_max_walk_weight(max_walk_weight)
+
+    if ui_inventory.GUI and ui_inventory.GUI:IsShown() then
+        ui_inventory.GUI:UpdateWeight()
+    end
 end
 
 local function refresh_weights()
